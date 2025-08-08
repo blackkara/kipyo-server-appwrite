@@ -68,6 +68,32 @@ class OptimizedAppwriteService {
     }
   }
 
+    async validateAndExtractUser(headers, requestId, log) {
+    try {
+      const jwtToken = extractJWTFromHeaders(headers);
+      if (!jwtToken) {
+        throw new Error('JWT token not found in headers');
+      }
+
+    
+
+      // TEK SEFERDE HEM VALİDE ET HEM USER INFO AL
+      const userInfo = await this.validateJWT(jwtToken);
+
+      if (!userInfo || !userInfo.$id) {
+        throw new Error('Failed to extract user info from JWT');
+      }
+
+      log(`[${requestId}] JWT validation successful for user: ${userInfo.$id}`);
+
+      return { jwtToken, userInfo };
+
+    } catch (tokenError) {
+      log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
+      throw new Error(tokenError.message);
+    }
+  }
+
 
   // ✅ READ: Normal client yeterli (zaten güvenli)
   async listDocuments(jwtToken, collectionId, queries = []) {

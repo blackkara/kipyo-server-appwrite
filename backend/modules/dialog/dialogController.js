@@ -1,5 +1,5 @@
 import dialogService from './dialogService.js';
-import AppwriteService, { extractJWTFromHeaders } from '../../appwrite.js';
+import AppwriteService from '../../appwrite_secure.js';
 
 class DialogController {
 
@@ -13,21 +13,15 @@ class DialogController {
       log(`[${requestId}] Dialog request started`);
 
       let jwtToken;
-      let requestedUserId;
+      let requestedUser;
 
-      // JWT validation
       try {
-        jwtToken = extractJWTFromHeaders(req.headers);
-        if (!jwtToken) {
-          throw new Error('JWT token not found in headers');
-        }
-
         const appwriteService = new AppwriteService();
-        requestedUserId = appwriteService.getUserIdFromJWT(jwtToken);
+        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
 
-        if (!requestedUserId) {
-          throw new Error('Failed to extract user ID from JWT');
-        }
+        jwtToken = authResult.jwtToken;
+        requestedUser = authResult.userInfo;
+
       } catch (tokenError) {
         log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
         const duration = Date.now() - startTime;
@@ -44,14 +38,14 @@ class DialogController {
 
       const { userId, occupantId } = req.body;
 
-      log(`[${requestId}] Request params: userId=${userId}, occupantId=${occupantId}, requesterId=${requestedUserId}`);
+      log(`[${requestId}] Request params: userId=${userId}, occupantId=${occupantId}, requesterId=${requestedUser.$id}`);
 
       // Service call
-      const dialog = await dialogService.handleDialogRequest(
+      const dialog = await dialogService.initDialog(
         userId,
         occupantId,
         jwtToken,
-        requestedUserId,
+        requestedUser.$id,
         requestId,
         log
       );

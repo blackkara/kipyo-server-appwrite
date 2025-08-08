@@ -1,5 +1,5 @@
 import interactionService from './interactionService.js';
-import AppwriteService, { extractJWTFromHeaders } from '../../appwrite.js';
+import AppwriteService from '../../appwrite_secure.js';
 
 class InteractionController {
 
@@ -41,19 +41,19 @@ class InteractionController {
       log(`[${requestId}] getAllInteractions request started`);
 
       let jwtToken;
-      let requestingUserId;
+      let requestedUser;
 
       try {
-        const authResult = await this.validateAndExtractUser(req.headers, requestId, log);
-        jwtToken = authResult.jwtToken;
-        requestingUserId = authResult.userInfo.$id;
+        const appwriteService = new AppwriteService();
+        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
 
-        if (!requestingUserId) {
-          throw new Error('Failed to extract user ID from JWT');
-        }
+        jwtToken = authResult.jwtToken;
+        requestedUser = authResult.userInfo;
+
       } catch (tokenError) {
         log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
         const duration = Date.now() - startTime;
+
         return res.status(401).json({
           success: false,
           code: 401,
@@ -64,7 +64,6 @@ class InteractionController {
         });
       }
 
-      // Query parameters için options oluştur
       const options = {
         includeLikes: req.query.includeLikes !== 'false',
         includeMatches: req.query.includeMatches !== 'false',
@@ -73,12 +72,11 @@ class InteractionController {
         limit: parseInt(req.query.limit) || 100
       };
 
-      log(`[${requestId}] Request params: requesterId=${requestingUserId}, options=${JSON.stringify(options)}`);
+      log(`[${requestId}] Request params: requesterId=${requestedUser.$id}, options=${JSON.stringify(options)}`);
 
-      // Service call
       const result = await interactionService.getAllInteractions(
         jwtToken,
-        requestingUserId,
+        requestedUser.$id,
         requestId,
         log,
         options
@@ -132,32 +130,6 @@ class InteractionController {
     }
   }
 
-  async validateAndExtractUser(headers, requestId, log) {
-    try {
-      const jwtToken = extractJWTFromHeaders(headers);
-      if (!jwtToken) {
-        throw new Error('JWT token not found in headers');
-      }
-
-      const appwriteService = new AppwriteService();
-
-      // TEK SEFERDE HEM VALİDE ET HEM USER INFO AL
-      const userInfo = await appwriteService.validateJWT(jwtToken);
-
-      if (!userInfo || !userInfo.$id) {
-        throw new Error('Failed to extract user info from JWT');
-      }
-
-      log(`[${requestId}] JWT validation successful for user: ${userInfo.$id}`);
-
-      return { jwtToken, userInfo };
-
-    } catch (tokenError) {
-      log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
-      throw new Error(tokenError.message);
-    }
-  }
-
   async handleInteraction(req, res, interactionType) {
     const startTime = Date.now();
     const requestId = Math.random().toString(36).substring(7);
@@ -168,16 +140,19 @@ class InteractionController {
       log(`[${requestId}] ${interactionType} interaction request started`);
 
       let jwtToken;
-      let requestingUserId;
+      let requestedUser;
 
       try {
-        const authResult = await this.validateAndExtractUser(req.headers, requestId, log);
+        const appwriteService = new AppwriteService();
+        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
+
         jwtToken = authResult.jwtToken;
-        requestingUserId = authResult.userInfo.$id;
+        requestedUser = authResult.userInfo;
 
       } catch (tokenError) {
         log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
         const duration = Date.now() - startTime;
+
         return res.status(401).json({
           success: false,
           code: 401,
@@ -190,19 +165,16 @@ class InteractionController {
 
       const { receiverId } = req.body;
 
-      // if (requestingUserId !== senderId) {
-      //   throw new Error('Unauthorized: Token mismatch');
-      // }
-
-      log(`[${requestId}] Request params: receiverId=${receiverId}, requesterId=${requestingUserId}, interactionType=${interactionType}`);
+    
+      log(`[${requestId}] Request params: receiverId=${receiverId}, requesterId=${requestedUser.$id}, interactionType=${interactionType}`);
 
       // Service call
       const result = await interactionService.handleUserInteraction(
         interactionType,
-        requestingUserId,
+        requestedUser.$id,
         receiverId,
         jwtToken,
-        requestingUserId,
+        requestedUser.$id,
         requestId,
         log
       );

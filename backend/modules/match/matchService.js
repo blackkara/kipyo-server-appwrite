@@ -5,10 +5,10 @@ const Query = createQuery();
 
 class MatchService {
 
-  async unmatch(matchId, requestedUserId, jwtToken, requestId, log) {
+  async unmatch(matchId, requestedUser, jwtToken, requestId, log) {
     try {
       // Validation
-      const validationErrors = this.validateRequest(matchId, requestedUserId);
+      const validationErrors = this.validateRequest(matchId, requestedUser.$id);
 
       if (validationErrors.length > 0) {
         const errorMessages = {
@@ -28,7 +28,7 @@ class MatchService {
       // Process unmatch operation
       const processStart = Date.now();
 
-      const result = await this.deleteMatch(jwtToken, matchId, requestedUserId, requestId, log);
+      const result = await this.deleteMatch(jwtToken, matchId, requestedUser.$id, requestId, log);
 
       const processDuration = Date.now() - processStart;
 

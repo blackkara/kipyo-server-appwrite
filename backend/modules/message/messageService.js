@@ -1,4 +1,4 @@
-import AppwriteService from '../../appwrite.js';
+import AppwriteService from '../../appwrite_secure.js';
 
 const { createQuery } = AppwriteService;
 const Query = createQuery();
@@ -66,7 +66,8 @@ class MessageService {
       log(`[${requestId}] Message created successfully with ID: ${newMessage.$id}`);
       return newMessage;
     } catch (e) {
-
+      log(`[${requestId}] ERROR in sendMessage: ${e.message}`);
+      throw new Error(`Failed to send message: ${e.message}`);
     }
   }
 
@@ -76,7 +77,7 @@ class MessageService {
 
       const appwriteService = new AppwriteService();
       const updatedDialog = await appwriteService.updateDocumentWithAdminPrivileges(
-        jwtToken,
+        senderId,
         process.env.DB_COLLECTION_DIALOGS_ID,
         dialogId,
         {
@@ -91,7 +92,8 @@ class MessageService {
       log(`[${requestId}] Dialog updated successfully with ID: ${updatedDialog.$id}`);
       return updatedDialog;
     } catch (e) {
-      rethrow;
+      log(`[${requestId}] ERROR in updateDialog: ${e.message}`);
+      throw new Error(`Failed to update dialog: ${e.message}`);
     }
   }
 

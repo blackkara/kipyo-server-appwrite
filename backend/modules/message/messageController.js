@@ -1,5 +1,5 @@
 import messageService from './messageService.js';
-import AppwriteService, { extractJWTFromHeaders } from '../../appwrite.js';
+import AppwriteService from '../../appwrite_secure.js';
 
 class MessageController {
 
@@ -10,29 +10,37 @@ class MessageController {
     const error = (message, err) => console.error(message, err);
 
     try {
-      log(`[${requestId}] Message request started`);
+      log(`[${requestId}] Send message request started`);
 
       let jwtToken;
-      let requestedUserId;
-
+      let requestedUser;
+      
       try {
-        jwtToken = extractJWTFromHeaders(req.headers);
         const appwriteService = new AppwriteService();
-        requestedUserId = appwriteService.getUserIdFromJWT(jwtToken);
+        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
+
+        jwtToken = authResult.jwtToken;
+        requestedUser = authResult.userInfo;
+
       } catch (tokenError) {
-        log(`[${requestId}] ERROR: ${tokenError.message}`);
+        log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
+        const duration = Date.now() - startTime;
+        
         return res.status(401).json({
+          success: false,
           code: 401,
           type: 'general_unauthorized',
-          message: tokenError.message
+          message: tokenError.message,
+          requestId: requestId,
+          duration: duration
         });
       }
 
       const { message, senderId, receiverId, dialogId } = req.body;
 
-      log(`[${requestId}] Request params: message=${message}, senderId=${senderId}, receiverId=${receiverId}, dialogId=${dialogId}, requesterId=${requestedUserId}`);
+      log(`[${requestId}] Request params: message=${message}, senderId=${senderId}, receiverId=${receiverId}, dialogId=${dialogId}, requesterId=${requestedUser.$id}`);
 
-      const newMessage = await messageService.send(message, senderId, receiverId, dialogId, jwtToken, requestedUserId, requestId, log);
+      const newMessage = await messageService.send(message, senderId, receiverId, dialogId, jwtToken, requestedUser.$id, requestId, log);
 
       const duration = Date.now() - startTime;
       log(`[${requestId}] Request completed successfully in ${duration}ms`);

@@ -1,5 +1,5 @@
 import exploreService from './exploreService.js';
-import AppwriteService, { extractJWTFromHeaders } from '../../appwrite.js';
+import AppwriteService from '../../appwrite_secure.js';
 
 class ExploreController {
 
@@ -14,20 +14,18 @@ class ExploreController {
 
       let jwtToken;
       let requestedUser;
-      let requestingUserId;
-
+      
       try {
-        const authResult = await this.validateAndExtractUser(req.headers, requestId, log);
+        const appwriteService = new AppwriteService();
+        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
+
         jwtToken = authResult.jwtToken;
         requestedUser = authResult.userInfo;
-        requestingUserId = authResult.userInfo.$id;
 
-        if (!requestingUserId) {
-          throw new Error('Failed to extract user ID from JWT');
-        }
       } catch (tokenError) {
         log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
         const duration = Date.now() - startTime;
+        
         return res.status(401).json({
           success: false,
           code: 401,
@@ -38,16 +36,13 @@ class ExploreController {
         });
       }
 
-      const {
-        limit = 10,
-        offset = 0
-      } = req.query;
+      const { limit = 10, offset = 0 } = req.query;
 
-      log(`[${requestId}] Request params: userId=${requestingUserId}, limit=${limit}, offset=${offset}`);
+      log(`[${requestId}] Request params: userId=${requestedUser.$id}, limit=${limit}, offset=${offset}`);
 
       // Service call
-      const cards = await exploreService.getSwipeCards(
-       requestedUser,
+      const result = await exploreService.getSwipeCards(
+        requestedUser,
         jwtToken,
         {
           limit: parseInt(limit),
@@ -58,16 +53,16 @@ class ExploreController {
       );
 
       const duration = Date.now() - startTime;
-      log(`[${requestId}] Request completed successfully in ${duration}ms, returned ${cards.length} cards`);
+      log(`[${requestId}] Request completed successfully in ${duration}ms, returned ${result.length} cards`);
 
       return res.status(200).json({
         success: true,
         code: 200,
         message: 'Cards retrieved successfully',
         data: {
-          cards,
-          count: cards.length,
-          hasMore: cards.length === parseInt(limit)
+          cards: result,
+          count: result.length,
+          hasMore: result.length === parseInt(limit)
         },
         requestId: requestId,
         duration: duration
@@ -77,8 +72,7 @@ class ExploreController {
       const duration = Date.now() - startTime;
       error(`[${requestId}] Request failed after ${duration}ms:`, serviceError);
       log(`[${requestId}] ERROR Details: ${serviceError.message}`);
-
-      // Error categorization
+      
       let statusCode = 500;
       let errorType = 'processing_error';
       let errorMessage = serviceError.message || 'Unknown error';
@@ -112,32 +106,6 @@ class ExploreController {
         requestId: requestId,
         duration: duration
       });
-    }
-  }
-
-  async validateAndExtractUser(headers, requestId, log) {
-    try {
-      const jwtToken = extractJWTFromHeaders(headers);
-      if (!jwtToken) {
-        throw new Error('JWT token not found in headers');
-      }
-
-      const appwriteService = new AppwriteService();
-
-      // TEK SEFERDE HEM VALİDE ET HEM USER INFO AL
-      const userInfo = await appwriteService.validateJWT(jwtToken);
-
-      if (!userInfo || !userInfo.$id) {
-        throw new Error('Failed to extract user info from JWT');
-      }
-
-      log(`[${requestId}] JWT validation successful for user: ${userInfo.$id}`);
-
-      return { jwtToken, userInfo };
-
-    } catch (tokenError) {
-      log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
-      throw new Error(tokenError.message);
     }
   }
 }

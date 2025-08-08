@@ -1,5 +1,5 @@
 import AppwriteService from '../../appwrite_secure.js';
-import { generatePhotoUrl, generatePhotoUrls } from '../../utils/photoUtils.js';
+import { generatePhotoUrls } from '../../utils/photoUtils.js';
 
 const { createQuery } = AppwriteService;
 const Query = createQuery();

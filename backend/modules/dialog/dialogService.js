@@ -1,4 +1,4 @@
-import AppwriteService from '../../appwrite.js';
+import AppwriteService from '../../appwrite_secure.js';
 import crypto from 'crypto';
 
 const { createQuery } = AppwriteService;
@@ -6,7 +6,7 @@ const Query = createQuery();
 
 class DialogService {
 
-  async handleDialogRequest(userId, occupantId, jwtToken, requestedUserId, requestId, log) {
+  async initDialog(userId, occupantId, jwtToken, requestedUserId, requestId, log) {
     try {
       // Validation
       const validationErrors = [];
@@ -59,7 +59,7 @@ class DialogService {
       return dialog;
 
     } catch (error) {
-      log(`[${requestId}] ERROR in handleDialogRequest: ${error.message}`);
+      log(`[${requestId}] ERROR in initDialog: ${error.message}`);
       throw error;
     }
   }

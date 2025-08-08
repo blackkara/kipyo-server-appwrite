@@ -1,5 +1,5 @@
 import matchService from './matchService.js';
-import AppwriteService, { extractJWTFromHeaders } from '../../appwrite.js';
+import AppwriteService from '../../appwrite_secure.js';
 
 class MatchController {
 
@@ -13,16 +13,19 @@ class MatchController {
       log(`[${requestId}] unmatch request started`);
 
       let jwtToken;
-      let requestingUserId;
-
+      let requestedUser;
+      
       try {
-        const authResult = await this.validateAndExtractUser(req.headers, requestId, log);
+        const appwriteService = new AppwriteService();
+        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
+
         jwtToken = authResult.jwtToken;
-        requestingUserId = authResult.userInfo.$id;
+        requestedUser = authResult.userInfo;
 
       } catch (tokenError) {
         log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
         const duration = Date.now() - startTime;
+        
         return res.status(401).json({
           success: false,
           code: 401,
@@ -35,12 +38,11 @@ class MatchController {
 
       const { matchId } = req.body;
 
-      log(`[${requestId}] Request params: matchId=${matchId}, requesterId=${requestingUserId}`);
+      log(`[${requestId}] Request params: matchId=${matchId}, requesterId=${requestedUser.$id}`);
 
-      // Service call
       const result = await matchService.unmatch(
         matchId,
-        requestingUserId,
+        requestedUser,
         jwtToken,
         requestId,
         log
@@ -96,32 +98,6 @@ class MatchController {
         requestId: requestId,
         duration: duration
       });
-    }
-  }
-
-  async validateAndExtractUser(headers, requestId, log) {
-    try {
-      const jwtToken = extractJWTFromHeaders(headers);
-      if (!jwtToken) {
-        throw new Error('JWT token not found in headers');
-      }
-
-      const appwriteService = new AppwriteService();
-
-      // TEK SEFERDE HEM VALİDE ET HEM USER INFO AL
-      const userInfo = await appwriteService.validateJWT(jwtToken);
-
-      if (!userInfo || !userInfo.$id) {
-        throw new Error('Failed to extract user info from JWT');
-      }
-
-      log(`[${requestId}] JWT validation successful for user: ${userInfo.$id}`);
-
-      return { jwtToken, userInfo };
-
-    } catch (tokenError) {
-      log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
-      throw new Error(tokenError.message);
     }
   }
 }
