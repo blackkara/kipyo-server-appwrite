@@ -147,4 +147,6 @@ backend/modules/profile/googleAuth.json
 # Environment files
 .env
 .env.local
-.env.production
+.env.productionbackend/kipyo-prod-firebase-adminsdk.json
+backend/modules/profile/googleAuth.json
+*.json
