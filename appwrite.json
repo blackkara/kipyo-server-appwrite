@@ -1,0 +1,998 @@
+{
+    "projectId": "6867d552001fa11c2dc3",
+    "projectName": "zephyr",
+    "settings": {
+        "services": {
+            "account": true,
+            "avatars": true,
+            "databases": true,
+            "locale": true,
+            "health": true,
+            "storage": true,
+            "teams": true,
+            "users": true,
+            "sites": true,
+            "functions": true,
+            "graphql": true,
+            "messaging": true
+        },
+        "auth": {
+            "methods": {
+                "jwt": true,
+                "phone": true,
+                "invites": true,
+                "anonymous": true,
+                "email-otp": true,
+                "magic-url": true,
+                "email-password": true
+            },
+            "security": {
+                "duration": 31536000,
+                "limit": 0,
+                "sessionsLimit": 10,
+                "passwordHistory": 0,
+                "passwordDictionary": false,
+                "personalDataCheck": false,
+                "sessionAlerts": false,
+                "mockNumbers": []
+            }
+        }
+    },
+    "functions": [
+        {
+            "$id": "684db43d0001eb4768e4",
+            "name": "Analyze Image",
+            "runtime": "node-22",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/Analyze Image"
+        },
+        {
+            "$id": "6850b34a003d0d515c2c",
+            "name": "Upload Profile Image",
+            "runtime": "node-22",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/Upload Profile Image"
+        },
+        {
+            "$id": "6855d99300126431c691",
+            "name": "Create Dialog (Teams)",
+            "runtime": "node-22",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/Create Dialog (Teams)"
+        },
+        {
+            "$id": "685c90d0000e9d2e77f7",
+            "name": "Delete Account",
+            "runtime": "node-22",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/Delete Account"
+        },
+        {
+            "$id": "68650876001a99c618a9",
+            "name": "Create Dialog",
+            "runtime": "node-22",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/Create Dialog"
+        },
+        {
+            "$id": "68655c1b0022b8911e56",
+            "name": "Send Message",
+            "runtime": "node-22",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/Send Message"
+        },
+        {
+            "$id": "686c731f00380a0e0e07",
+            "name": "Interact User",
+            "runtime": "node-22",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/Interact User"
+        }
+    ],
+    "databases": [
+        {
+            "$id": "657e07e99ad1b086d9a9",
+            "name": "zephyr",
+            "enabled": true
+        }
+    ],
+    "collections": [
+        {
+            "$id": "683e4215002f4fb69d06",
+            "$permissions": [
+                "read(\"users\")"
+            ],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "profiles",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "userId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "username",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "email",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "format": "email",
+                    "default": null
+                },
+                {
+                    "key": "createDate",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false,
+                    "format": "",
+                    "default": null
+                },
+                {
+                    "key": "birthDate",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false,
+                    "format": "",
+                    "default": null
+                },
+                {
+                    "key": "gender",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "elements": [
+                        "male",
+                        "female",
+                        "other"
+                    ],
+                    "format": "enum",
+                    "default": null
+                },
+                {
+                    "key": "about",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 1024,
+                    "default": null
+                },
+                {
+                    "key": "photos",
+                    "type": "string",
+                    "required": false,
+                    "array": true,
+                    "size": 256,
+                    "default": null
+                },
+                {
+                    "key": "countryCode",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 3,
+                    "default": null
+                },
+                {
+                    "key": "city",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 50,
+                    "default": null
+                },
+                {
+                    "key": "dialogs",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "686471e80005ec74da30",
+                    "relationType": "manyToMany",
+                    "twoWay": true,
+                    "twoWayKey": "occupants",
+                    "onDelete": "setNull",
+                    "side": "child"
+                }
+            ],
+            "indexes": []
+        },
+        {
+            "$id": "68437e97001fe14d03da",
+            "$permissions": [],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "likes",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "likerId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "likedId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "likerRef",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "686faf5f002667897655",
+                    "onDelete": "cascade",
+                    "side": "parent"
+                },
+                {
+                    "key": "likedRef",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "686fafb600017969ac19",
+                    "onDelete": "cascade",
+                    "side": "parent"
+                },
+                {
+                    "key": "expireDate",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false,
+                    "format": "",
+                    "default": null
+                },
+                {
+                    "key": "matchId",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 32,
+                    "default": null
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "uniqueLikes",
+                    "type": "unique",
+                    "status": "available",
+                    "attributes": [
+                        "likerId",
+                        "likedId"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "keyLikerId",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "likerId"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                },
+                {
+                    "key": "keyLikedId",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "likedId"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "6844239b0034fb5730c3",
+            "$permissions": [],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "blocks",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "blockerId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "blockedId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "blockedProfile",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "68737ca600223e560429",
+                    "onDelete": "cascade",
+                    "side": "parent"
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "uniqueBlocks",
+                    "type": "unique",
+                    "status": "available",
+                    "attributes": [
+                        "blockerId",
+                        "blockedId"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "keyBlockerId",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "blockerId"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                },
+                {
+                    "key": "keyBlockedId",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "blockedId"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "6844270e000624a491ef",
+            "$permissions": [],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "trusts",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "trusterId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "trustedId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "trusterRelation",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "686faff7000a8e9a2706",
+                    "onDelete": "cascade",
+                    "side": "parent"
+                },
+                {
+                    "key": "trustedRelation",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "686fb01a00035ec36f1b",
+                    "onDelete": "cascade",
+                    "side": "parent"
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "uniqueTrusts",
+                    "type": "unique",
+                    "status": "available",
+                    "attributes": [
+                        "trusterId",
+                        "trustedId"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "keyTrusterID",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "trusterId"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                },
+                {
+                    "key": "keyTrustedId",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "trustedId"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "684428a20005470c0ae4",
+            "$permissions": [
+                "create(\"users\")"
+            ],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "reports",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "reporterId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "reportedId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "description",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 512,
+                    "default": null
+                },
+                {
+                    "key": "reasonIds",
+                    "type": "integer",
+                    "required": false,
+                    "array": true,
+                    "min": -9223372036854775808,
+                    "max": 9223372036854775807,
+                    "default": null
+                },
+                {
+                    "key": "reportedProfile",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "6861df2b00127c9afee5",
+                    "onDelete": "setNull",
+                    "side": "parent"
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "keyReporterId",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "reporterId"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                },
+                {
+                    "key": "keyReportedId",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "reportedId"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "6844c0bd0009e97e04f5",
+            "$permissions": [],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "messages",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "dialogId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "message",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 1024,
+                    "default": null
+                },
+                {
+                    "key": "senderId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "receiverId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "translatedBody",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 1024,
+                    "default": null
+                },
+                {
+                    "key": "translatedLanguage",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 3,
+                    "default": null
+                },
+                {
+                    "key": "dialogs",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "686471e80005ec74da30",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "messages",
+                    "onDelete": "cascade",
+                    "side": "parent"
+                },
+                {
+                    "key": "profiles",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "686faf06002fde53c1dd",
+                    "onDelete": "cascade",
+                    "side": "parent"
+                }
+            ],
+            "indexes": []
+        },
+        {
+            "$id": "68571641001893bfe8a4",
+            "$permissions": [],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "dialogsDELETE",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "occupantIds",
+                    "type": "string",
+                    "required": false,
+                    "array": true,
+                    "size": 50,
+                    "default": null
+                },
+                {
+                    "key": "canonicalDialogId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 100,
+                    "default": null
+                },
+                {
+                    "key": "teamId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 50,
+                    "default": null
+                },
+                {
+                    "key": "trustedOccupants",
+                    "type": "string",
+                    "required": false,
+                    "array": true,
+                    "size": 50,
+                    "default": null
+                },
+                {
+                    "key": "participants",
+                    "type": "string",
+                    "required": false,
+                    "array": true,
+                    "size": 50,
+                    "default": null
+                }
+            ],
+            "indexes": []
+        },
+        {
+            "$id": "686471e80005ec74da30",
+            "$permissions": [],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "dialogs",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "lastMessage",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "size": 1024,
+                    "default": null
+                },
+                {
+                    "key": "updatedAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false,
+                    "format": "",
+                    "default": null
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false,
+                    "format": "",
+                    "default": null
+                },
+                {
+                    "key": "lastMessageSenderId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 32,
+                    "default": null
+                },
+                {
+                    "key": "occupantIds",
+                    "type": "string",
+                    "required": false,
+                    "array": true,
+                    "size": 32,
+                    "default": null
+                },
+                {
+                    "key": "blockedIds",
+                    "type": "string",
+                    "required": false,
+                    "array": true,
+                    "size": 32,
+                    "default": null
+                },
+                {
+                    "key": "occupants",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToMany",
+                    "twoWay": true,
+                    "twoWayKey": "dialogs",
+                    "onDelete": "setNull",
+                    "side": "parent"
+                },
+                {
+                    "key": "matchId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 32,
+                    "default": null
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "updatedAt_idx",
+                    "type": "key",
+                    "status": "available",
+                    "attributes": [
+                        "updatedAt"
+                    ],
+                    "orders": [
+                        "desc"
+                    ]
+                }
+            ]
+        },
+        {
+            "$id": "687650a1000fcfa29f49",
+            "$permissions": [],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "dislikes",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "dislikerId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 32,
+                    "default": null
+                },
+                {
+                    "key": "dislikedId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 32,
+                    "default": null
+                }
+            ],
+            "indexes": []
+        },
+        {
+            "$id": "687665e10012180b14b8",
+            "$permissions": [],
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "matches",
+            "enabled": true,
+            "documentSecurity": true,
+            "attributes": [
+                {
+                    "key": "userFirst",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 32,
+                    "default": null
+                },
+                {
+                    "key": "userSecond",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 32,
+                    "default": null
+                },
+                {
+                    "key": "createDate",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false,
+                    "format": "",
+                    "default": null
+                },
+                {
+                    "key": "userFirstRef",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "687672e5001347e4152c",
+                    "onDelete": "setNull",
+                    "side": "parent"
+                },
+                {
+                    "key": "userSecondRef",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "683e4215002f4fb69d06",
+                    "relationType": "manyToOne",
+                    "twoWay": false,
+                    "twoWayKey": "687672fe0024837ad81d",
+                    "onDelete": "setNull",
+                    "side": "parent"
+                },
+                {
+                    "key": "dialogRef",
+                    "type": "relationship",
+                    "required": false,
+                    "array": false,
+                    "relatedCollection": "686471e80005ec74da30",
+                    "relationType": "oneToOne",
+                    "twoWay": false,
+                    "twoWayKey": "687a7bde000fdf91b83a",
+                    "onDelete": "cascade",
+                    "side": "parent"
+                }
+            ],
+            "indexes": []
+        },
+        {
+            "$id": "687ecb0200117d45d1f2",
+            "databaseId": "657e07e99ad1b086d9a9",
+            "name": "test123",
+            "documentSecurity": true,
+            "attributes": [],
+            "indexes": [],
+            "enabled": true
+        }
+    ],
+    "teams": [
+        {
+            "$id": "683e05ef003329b6ea89",
+            "name": "premium"
+        },
+        {
+            "$id": "68587d6b001dbbc988a1",
+            "name": "Dialog_6856809fec45ecafda7d_6856047fa04f2602e3c6"
+        },
+        {
+            "$id": "685897ce0033183ddd00",
+            "name": "Dialog_684b8041c7725a903d9f_6856047fa04f2602e3c6"
+        },
+        {
+            "$id": "6858a083002d11884b2a",
+            "name": "Dialog_6856809fec45ecafda7d_684b8041c7725a903d9f"
+        }
+    ]
+}

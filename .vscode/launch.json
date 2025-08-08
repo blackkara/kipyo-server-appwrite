@@ -1,0 +1,56 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach by Process ID",
+      "processId": "${command:PickProcess}",
+      "request": "attach",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Program",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "program": "${workspaceFolder}/backend/server.js",
+      "env": {
+        "NODE_ENV": "development",
+        "_DB_COLLECTION_BLOCKS_ID": "6844239b0034fb5730c3",
+        "_DB_COLLECTION_DIALOGS_ID": "686471e80005ec74da30",
+        "_DB_COLLECTION_MESSAGES_ID": "6844c0bd0009e97e04f5",
+        "_DB_COLLECTION_MATCHES_ID": "687665e10012180b14b8",
+        "_DB_COLLECTION_LIKES_ID": "68437e97001fe14d03da",
+        "_DB_COLLECTION_DISLIKES_ID": "687650a1000fcfa29f49",
+        "_APPWRITE_END_POINT": "https://fra.cloud.appwrite.io/v1",
+        "_APPWRITE_PROJECT_ID": "zephyr",
+        "_APPWRITE_DB_ID": "657e07e99ad1b086d9a9",
+        "_APPWRITE_DEV_KEY": "standard_cee17f1607b2c27535570cd5b5b7f98e80ce61f1b919c5e14aed3fc621e3d879f43c7ddce7efe86f80461783f5dab365fe50b0fe6c9732992c2e0969207dcc64d32e48059ff3e3dd008ca1f878a80476909439c27febc45bdb9cd48d26d5547ef4e4b8a3aacbd28582c61392513ed82a3bbebaf0a5eefcae8b9986502803c4bf",
+        "DB_COLLECTION_BLOCKS_ID": "6844239b0034fb5730c3",
+        "DB_COLLECTION_DIALOGS_ID": "686471e80005ec74da30",
+        "DB_COLLECTION_MESSAGES_ID": "6844c0bd0009e97e04f5",
+        "DB_COLLECTION_MATCHES_ID": "687665e10012180b14b8",
+        "DB_COLLECTION_LIKES_ID": "68437e97001fe14d03da",
+        "DB_COLLECTION_DISLIKES_ID": "687650a1000fcfa29f49",
+        "DB_COLLECTION_PROFILES_ID": "683e4215002f4fb69d06",
+        "APPWRITE_END_POINT": "https://mobile-api.kipyo.com/v1",
+        "APPWRITE_PROJECT_ID": "6867d552001fa11c2dc3",
+        "APPWRITE_DB_ID": "657e07e99ad1b086d9a9",
+        "APPWRITE_DEV_KEY": "standard_e0f5448b02f14664c1a4de120df4cd9924da9cfd0ac8e47f0b93c80f50c844948d9c105bc4388528b7d7f21b4dcddeeed65b58efebd79a5b211a62e0ed1a869d064d0bfb538aedf17bb166d4f261a9897b7a98409ec646e834428ef8fcf6d2e4009e5425155dee89c1c975f8e37091b626875ffbcc1525c9202ada69c075cea0",
+        "SPACES_SECRET_ACCESS_KEY": "LDlnZSS28xV02xxUCYbwwVc2ASCXJ7/N15COCmYC9Fo",
+        "SPACES_ACCESS_KEY_ID": "DO00R9RUA88ZB7Y8JCKZ",
+        "SPACES_AWS_REGION": "us-east-1",
+        "SPACES_ENDPOINT": "https://fra1.digitaloceanspaces.com",
+        "SPACES_BUCKET": "kipyo",
+        "GOOGLE_CREDENTIALS": "",
+      }
+    }
+  ]
+}
