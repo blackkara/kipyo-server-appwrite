@@ -137,3 +137,14 @@ dist
 backend/node_modules/
 migration/node_modules/
 functions/*/node_modules/
+# Google Service Account Files
+*.json
+**/firebase-adminsdk*.json
+**/googleAuth.json
+backend/kipyo-prod-firebase-adminsdk.json
+backend/modules/profile/googleAuth.json
+
+# Environment files
+.env
+.env.local
+.env.production
