@@ -9,6 +9,27 @@ import exploreRoutes from './modules/explore/exploreRoutes.js';
 import profileRoutes from './modules/profile/profileRoutes.js';
 import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js';
 
+import AppwriteService from './appwrite.js'
+
+const appwriteService = new AppwriteService();
+
+// const healthReport = await appwriteService.checkJWTHealth(jwtToken);
+// if (!healthReport.isValid) {
+//   console.log('JWT Issues:', healthReport.errors);
+//   console.log('Recommendations:', healthReport.recommendations);
+// }
+
+// // Full diagnostics
+// const diagnostics = await appwriteService.getJWTDiagnostics(jwtToken);
+// console.log('JWT Diagnostics:', diagnostics);
+
+// Cache monitoring
+setInterval(() => {
+  const stats = appwriteService.getCacheStats();
+  console.log('Connection Cache:', stats);
+}, 30000); // 30 seconds
+
+
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import path from 'path';
@@ -41,7 +62,7 @@ app.use((req, res, next) => {
 app.use(cors());
 
 // Body parser middleware with size limits
-app.use(express.json({ 
+app.use(express.json({
   limit: '10mb',
   verify: (req, res, buf, encoding) => {
     // Photo upload endpoint'i için özel kontrol
@@ -52,29 +73,29 @@ app.use(express.json({
   }
 }));
 
-app.use(express.urlencoded({ 
-  limit: '10mb', 
-  extended: true 
+app.use(express.urlencoded({
+  limit: '10mb',
+  extended: true
 }));
 
 // Request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   const requestId = Math.random().toString(36).substring(7);
-  
+
   // Request ID'yi req objesine ekle
   req.requestId = requestId;
-  
+
   console.log(`[${requestId}] ${timestamp} - ${req.method} ${req.path}`);
-  
+
   // Response log için
   const originalSend = res.send;
-  res.send = function(data) {
+  res.send = function (data) {
     const duration = Date.now() - req.startTime;
     console.log(`[${requestId}] Response: ${res.statusCode} - ${duration}ms`);
     return originalSend.call(this, data);
   };
-  
+
   next();
 });
 
@@ -132,7 +153,7 @@ app.use((error, req, res, next) => {
 
   // PayloadTooLargeError handling
   if (error.type === 'entity.too.large') {
-    const appError = new AppError(ERROR_CODES.IMAGE_TOO_LARGE, 
+    const appError = new AppError(ERROR_CODES.IMAGE_TOO_LARGE,
       `Request payload too large. Maximum allowed size is 10MB, received: ${Math.round(error.length / 1024 / 1024)}MB`);
     return ErrorHandler.handleControllerError(appError, res, requestId, req.startTime || Date.now());
   }

@@ -106,7 +106,7 @@ class MatchService {
       const deletePromises = [
         // Delete match document
         appwriteService.deleteDocumentWithAdminPrivileges(
-
+          jwtToken,
           process.env.DB_COLLECTION_MATCHES_ID,
           matchId
         )
@@ -116,7 +116,7 @@ class MatchService {
       likesQuery.documents.forEach(doc => {
         deletePromises.push(
           appwriteService.deleteDocumentWithAdminPrivileges(
-
+            jwtToken,
             process.env.DB_COLLECTION_LIKES_ID,
             doc.$id
           )
@@ -127,7 +127,7 @@ class MatchService {
       dialogsQuery.documents.forEach(doc => {
         deletePromises.push(
           appwriteService.deleteDocumentWithAdminPrivileges(
-
+            jwtToken,
             process.env.DB_COLLECTION_DIALOGS_ID,
             doc.$id
           )

@@ -365,6 +365,7 @@ class InteractionService {
         if (blocked) {
           // Block: Create new record
           const newRecord = await appwriteService.createDocumentWithAdminPrivileges(
+            jwtToken,
             senderId,
             process.env.DB_COLLECTION_BLOCKS_ID,
             'unique()',
@@ -441,6 +442,7 @@ class InteractionService {
       }
 
       const newMatch = await appwriteService.createDocumentWithAdminPrivileges(
+        jwtToken,
         requestingUserId,
         process.env.DB_COLLECTION_MATCHES_ID,
         'unique()',
@@ -501,6 +503,7 @@ class InteractionService {
       // Create new dialog
       const occupants = [requestingUserId, receiverId].sort();
       const newDialog = await appwriteService.createDocumentWithAdminPrivileges(
+        jwtToken,
         requestingUserId,
         process.env.DB_COLLECTION_DIALOGS_ID,
         dialogId,
@@ -571,6 +574,7 @@ class InteractionService {
 
       // Create new dislike record
       const newDislike = await appwriteService.createDocumentWithAdminPrivileges(
+        jwtToken,
         senderId,
         process.env.DB_COLLECTION_DISLIKES_ID,
         'unique()',
@@ -685,6 +689,7 @@ class InteractionService {
             await this.createDialogForMatch(jwtToken, senderId, receiverId, matchRecord.$id, requestId, log);
             // Karşı like'ı match olarak işaretle
             await appwriteService.updateDocumentWithAdminPrivileges(
+              jwtToken,
               receiverId,
               process.env.DB_COLLECTION_LIKES_ID,
               reciprocalLike.$id,
@@ -775,6 +780,7 @@ class InteractionService {
           expirationDate.setDate(expirationDate.getDate() + 7);
 
           like = await appwriteService.createDocumentWithAdminPrivileges(
+            jwtToken,
             senderId,
             process.env.DB_COLLECTION_LIKES_ID,
             'unique()',
@@ -799,6 +805,7 @@ class InteractionService {
         expirationDate.setDate(expirationDate.getDate() + 7);
 
         like = await appwriteService.createDocumentWithAdminPrivileges(
+          jwtToken,
           senderId,
           process.env.DB_COLLECTION_LIKES_ID,
           'unique()',

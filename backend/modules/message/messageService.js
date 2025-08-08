@@ -77,6 +77,7 @@ class MessageService {
 
       const appwriteService = new AppwriteService();
       const updatedDialog = await appwriteService.updateDocumentWithAdminPrivileges(
+        jwtToken,
         senderId,
         process.env.DB_COLLECTION_DIALOGS_ID,
         dialogId,
