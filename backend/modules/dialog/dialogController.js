@@ -1,5 +1,5 @@
 import dialogService from './dialogService.js';
-import AppwriteService from '../../appwrite_secure.js';
+import AppwriteService from '../../appwrite.js';
 
 class DialogController {
 

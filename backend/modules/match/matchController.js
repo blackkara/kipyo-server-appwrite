@@ -1,5 +1,5 @@
 import matchService from './matchService.js';
-import AppwriteService from '../../appwrite_secure.js';
+import AppwriteService from '../../appwrite.js';
 
 class MatchController {
 

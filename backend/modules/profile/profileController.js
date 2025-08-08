@@ -1,5 +1,5 @@
 import profileService from './profileService.js';
-import AppwriteService from '../../appwrite_secure.js';
+import AppwriteService from '../../appwrite.js';
 import { ERROR_CODES, AppError, ErrorHandler } from '../../utils/errorConstants.js';
 
 class ProfileController {
@@ -43,12 +43,12 @@ class ProfileController {
         throw new AppError(ERROR_CODES.REQUIRED_PARAMETER_MISSING, 'timezoneOffset parameter is required');
       }
 
-      log(`[${requestId}] Request params: userId=${requestingUserId}`);
+      log(`[${requestId}] Request params: userId=${requestedUser.$id}, timezoneOffset=${timezoneOffset}`);
 
       // Service call
       const result = await profileService.getProfile(
         jwtToken,
-        requestingUserId,
+        requestedUser.$id,
         requestId,
         log,
         timezoneOffset

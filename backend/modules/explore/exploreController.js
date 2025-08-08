@@ -1,5 +1,5 @@
 import exploreService from './exploreService.js';
-import AppwriteService from '../../appwrite_secure.js';
+import AppwriteService from '../../appwrite.js';
 
 class ExploreController {
 

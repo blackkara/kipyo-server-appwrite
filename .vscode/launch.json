@@ -50,6 +50,7 @@
         "SPACES_ENDPOINT": "https://fra1.digitaloceanspaces.com",
         "SPACES_BUCKET": "kipyo",
         "GOOGLE_CREDENTIALS": "",
+        "POSTHOG_API_KEY":"phc_ljNJimUeCYZy1IqQeoquGLq20QV59l2EvMo8KGZZoFp"
       }
     }
   ]

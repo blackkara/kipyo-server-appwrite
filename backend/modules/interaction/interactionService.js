@@ -1,4 +1,4 @@
-import AppwriteService from '../../appwrite_secure.js';
+import AppwriteService from '../../appwrite.js';
 import pushNotificationService from '../../pushNotificationsService.js';
 import { generatePhotoUrls } from '../../utils/photoUtils.js';
 import crypto from 'crypto';

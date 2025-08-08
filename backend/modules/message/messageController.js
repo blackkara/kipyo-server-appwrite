@@ -1,5 +1,5 @@
 import messageService from './messageService.js';
-import AppwriteService from '../../appwrite_secure.js';
+import AppwriteService from '../../appwrite.js';
 
 class MessageController {
 

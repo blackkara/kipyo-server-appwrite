@@ -1,6 +1,6 @@
 import { Client, Databases, Account, Query, Permission, Role } from 'node-appwrite';
 
-class OptimizedAppwriteService {
+class AppwriteService {
   // Create client with JWT token or API key
   createClient(auth) {
     if (!auth) {
@@ -68,14 +68,12 @@ class OptimizedAppwriteService {
     }
   }
 
-    async validateAndExtractUser(headers, requestId, log) {
+  async validateAndExtractUser(headers, requestId, log) {
     try {
       const jwtToken = extractJWTFromHeaders(headers);
       if (!jwtToken) {
         throw new Error('JWT token not found in headers');
       }
-
-    
 
       // TEK SEFERDE HEM VALİDE ET HEM USER INFO AL
       const userInfo = await this.validateJWT(jwtToken);
@@ -94,10 +92,7 @@ class OptimizedAppwriteService {
     }
   }
 
-
-  // ✅ READ: Normal client yeterli (zaten güvenli)
   async listDocuments(jwtToken, collectionId, queries = []) {
-    //await this.validateJWT(jwtToken);
     const databases = this.getDatabases(jwtToken);
     return await databases.listDocuments(
       process.env.APPWRITE_DB_ID,
@@ -106,10 +101,7 @@ class OptimizedAppwriteService {
     );
   }
 
-
-  // ✅ CREATE: Admin privileges gerekli (collection-level permission yok)
   async createDocumentWithAdminPrivileges(requestingUserId, collectionId, documentId, data, additionalUsers = []) {
-
     const permissions = [
       Permission.read(Role.user(requestingUserId)),
       Permission.update(Role.user(requestingUserId)),
@@ -142,7 +134,6 @@ class OptimizedAppwriteService {
       });
     });
 
-    // Admin ile oluştur (çünkü collection-level create permission yok)
     const adminDatabases = this.getDatabases(process.env.APPWRITE_DEV_KEY);
     return await adminDatabases.createDocument(
       process.env.APPWRITE_DB_ID,
@@ -248,86 +239,7 @@ class OptimizedAppwriteService {
     );
   }
 
-  // 🎯 Convenience methods - Yaygın kullanım senaryoları
 
-  // userA → userB'ye mesaj (userB sadece okuyabilir)
-  async createMessageDocument(jwtToken, collectionId, documentId, data, receiverUserId) {
-    return await this.createDocumentWithAdminPrivileges(
-      jwtToken,
-      collectionId,
-      documentId,
-      { ...data, receiverUserId }, // Metadata ekle
-      [{ userId: receiverUserId, permissions: ['read'] }]
-    );
-  }
-
-  // userA ↔ userB paylaşımlı döküman (ikisi de okuyup yazabilir)
-  async createSharedDocument(jwtToken, collectionId, documentId, data, collaboratorUserId) {
-    return await this.createDocumentWithAdminPrivileges(
-      jwtToken,
-      collectionId,
-      documentId,
-      { ...data, collaboratorUserId }, // Metadata ekle
-      [{ userId: collaboratorUserId, permissions: ['read', 'update', 'delete'] }]
-    );
-  }
-
-  // Mesaj güncelleme (sadece gönderen güncelleyebilir)
-  async updateMessageDocument(jwtToken, collectionId, documentId, data) {
-    return await this.updateDocument(jwtToken, collectionId, documentId, data);
-  }
-
-  // Paylaşımlı döküman güncelleme (her iki taraf da güncelleyebilir)  
-  async updateSharedDocument(jwtToken, collectionId, documentId, data) {
-    return await this.updateDocument(jwtToken, collectionId, documentId, data);
-  }
-
-  // Mesaj silme (gönderen veya alıcı silebilir - permission varsa)
-  async deleteMessageDocument(jwtToken, collectionId, documentId) {
-    return await this.deleteDocument(jwtToken, collectionId, documentId);
-  }
-
-  // Paylaşımlı döküman silme (her iki taraf da silebilir)
-  async deleteSharedDocument(jwtToken, collectionId, documentId) {
-    return await this.deleteDocument(jwtToken, collectionId, documentId);
-  }
-
-  // 📊 Advanced operations
-
-  // Kullanıcının tüm mesajlarını sil (gönderdiği + aldığı)
-  async deleteAllUserMessages(jwtToken, messagesCollectionId) {
-    const userInfo = await this.validateJWT(jwtToken);
-    const userId = userInfo.$id;
-
-    // Gönderdiği mesajları sil
-    const sentResults = await this.deleteUserDocuments(jwtToken, messagesCollectionId, [
-      Query.equal('senderId', userId)
-    ]);
-
-    // Aldığı mesajları sil (permission varsa silebilir)
-    const userDatabases = this.getDatabases(jwtToken);
-    const receivedMessages = await userDatabases.listDocuments(
-      process.env.APPWRITE_DB_ID,
-      messagesCollectionId,
-      [Query.equal('receiverUserId', userId)]
-    );
-
-    let receivedDeleted = 0;
-    for (const msg of receivedMessages.documents) {
-      try {
-        await this.deleteDocument(jwtToken, messagesCollectionId, msg.$id);
-        receivedDeleted++;
-      } catch (error) {
-        console.warn(`Cannot delete received message ${msg.$id}: ${error.message}`);
-      }
-    }
-
-    return {
-      sentDeleted: sentResults.deletedCount,
-      receivedDeleted,
-      total: sentResults.deletedCount + receivedDeleted
-    };
-  }
 
   async deleteDocumentWithAdminPrivileges(collectionId, documentId) {
     const adminDatabases = this.getDatabases(process.env.APPWRITE_DEV_KEY);
@@ -372,7 +284,6 @@ class OptimizedAppwriteService {
       });
     });
 
-    // Admin ile oluştur (çünkü collection-level create permission yok)
     const adminDatabases = this.getDatabases(process.env.APPWRITE_DEV_KEY);
     return await adminDatabases.updateDocument(
       process.env.APPWRITE_DB_ID,
@@ -397,7 +308,7 @@ class OptimizedAppwriteService {
   }
 }
 
-export default OptimizedAppwriteService;
+export default AppwriteService;
 
 // Helper function to extract JWT token from request headers
 export function extractJWTFromHeaders(headers) {

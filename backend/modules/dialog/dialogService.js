@@ -1,4 +1,4 @@
-import AppwriteService from '../../appwrite_secure.js';
+import AppwriteService from '../../appwrite.js';
 import crypto from 'crypto';
 
 const { createQuery } = AppwriteService;

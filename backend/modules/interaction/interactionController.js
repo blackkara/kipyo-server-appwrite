@@ -1,5 +1,5 @@
 import interactionService from './interactionService.js';
-import AppwriteService from '../../appwrite_secure.js';
+import AppwriteService from '../../appwrite.js';
 
 class InteractionController {
 
