@@ -12,8 +12,7 @@ class ExploreService {
       const { limit = 10, offset = 0 } = filters;
       log(`[${requestId}] Starting getSwipeCards for user: ${requestingUser.$id} with filters: limit=${limit}, offset=${offset}`);
 
-      const appwriteService = new AppwriteService();
-
+  const appwriteService = AppwriteService.getInstance();
       // User preferences
       const showMeMinAge = requestingUser?.prefs?.showMeMinAge ?? 18;
       const showMeMaxAge = requestingUser?.prefs?.showMeMaxAge ?? 99;

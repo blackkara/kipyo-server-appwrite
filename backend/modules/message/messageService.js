@@ -46,7 +46,7 @@ class MessageService {
       const date = new Date().toISOString();
       log(`[${requestId}] Creating new message for dialog: ${dialogId}`);
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
 
       const newMessage = await appwriteService.createDocumentWithAdminPrivileges(
         jwtToken,
@@ -75,7 +75,7 @@ class MessageService {
     try {
       log(`[${requestId}] Updating dialog last message: ${dialogId}`);
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
       const updatedDialog = await appwriteService.updateDocumentWithAdminPrivileges(
         jwtToken,
         senderId,
@@ -101,7 +101,7 @@ class MessageService {
   async checkBlockage(senderId, receiverId, jwtToken, requestId, log) {
     try {
       log(`[${requestId}] Checking blockages between ${senderId} and ${receiverId}`);
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
       const documents = await appwriteService.listDocuments(
         jwtToken, // Use JWT for read operations
         process.env.DB_COLLECTION_BLOCKS_ID,

@@ -61,7 +61,7 @@ class MatchService {
       const operationStart = Date.now();
       log(`[${requestId}] Starting deleteMatch for matchId: ${matchId}`);
 
-      const appwriteService = new AppwriteService();
+     const appwriteService = AppwriteService.getInstance();
 
       // First, get the match record to retrieve dialog information and validate ownership
       const queryStart = Date.now();

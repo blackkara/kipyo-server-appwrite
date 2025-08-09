@@ -14,7 +14,7 @@ class DialogService {
       if (!occupantId) validationErrors.push('occupantId');
       if (!jwtToken) validationErrors.push('jwtToken');
       if (!requestedUserId) validationErrors.push('requestedUserId');
-      
+
       if (occupantId === userId) validationErrors.push('same_user_ids');
       if (requestedUserId !== userId && requestedUserId !== occupantId) validationErrors.push('unauthorized_access');
 
@@ -68,7 +68,7 @@ class DialogService {
     try {
       log(`[${requestId}] Querying dialogs collection for occupants: [${occupantsPair.join(', ')}]`);
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
       const documents = await appwriteService.listDocuments(
         jwtToken,
         process.env.DB_COLLECTION_DIALOGS_ID,
@@ -108,7 +108,7 @@ class DialogService {
       const hash = crypto.createHash('sha256').update(combined).digest('hex');
       const dialogId = `dialog_${hash.substring(0, 20)}`;
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
 
       const dialog = await appwriteService.createDocumentWithAdminPrivileges(
         jwtToken,
@@ -152,8 +152,8 @@ class DialogService {
   async hasAnyBlockage(jwtToken, senderId, receiverId, requestId, log) {
     try {
       log(`[${requestId}] Checking blockages between ${senderId} and ${receiverId}`);
-      
-      const appwriteService = new AppwriteService();
+
+      const appwriteService = AppwriteService.getInstance();
       const documents = await appwriteService.listDocuments(
         jwtToken,
         process.env.DB_COLLECTION_BLOCKS_ID,

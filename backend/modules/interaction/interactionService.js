@@ -70,7 +70,7 @@ class InteractionService {
       const operationStart = Date.now();
       log(`[${requestId}] Starting getAllInteractions for user: ${requestedUserId}`);
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
 
       // Varsayılan seçenekler
       const {
@@ -270,7 +270,7 @@ class InteractionService {
       const queryStart = Date.now();
       const occupantsPair = [senderId, receiverId].sort();
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
       const documents = await appwriteService.listDocuments(
         jwtToken,
         process.env.DB_COLLECTION_DIALOGS_ID,
@@ -328,7 +328,7 @@ class InteractionService {
     try {
       const queryStart = Date.now();
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
       const documents = await appwriteService.listDocuments(
         jwtToken,
         process.env.DB_COLLECTION_BLOCKS_ID,
@@ -421,7 +421,7 @@ class InteractionService {
 
   async createMatchRecord(jwtToken, requestingUserId, userId2, requestId, log) {
     try {
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
       const occupantsPair = [requestingUserId, userId2].sort();
 
       log(`[${requestId}] Creating match record for users: [${occupantsPair.join(', ')}]`);
@@ -468,7 +468,7 @@ class InteractionService {
   }
 
   async createDialogForMatch(jwtToken, requestingUserId, receiverId, matchId, requestId, log) {
-    const appwriteService = new AppwriteService();
+    const appwriteService = AppwriteService.getInstance();
 
     try {
       const occupantsPair = [requestingUserId, receiverId].sort();
@@ -556,7 +556,7 @@ class InteractionService {
       const operationStart = Date.now();
 
       // Check if user already disliked this person
-      const appwriteService = new AppwriteService();
+  const appwriteService = AppwriteService.getInstance();
       const existingDislikes = await appwriteService.listDocuments(
         jwtToken,
         process.env.DB_COLLECTION_DISLIKES_ID,
@@ -629,7 +629,7 @@ class InteractionService {
   async likeUser(jwtToken, senderId, receiverId, requestId, log) {
     try {
       const operationStart = Date.now();
-      const appwriteService = new AppwriteService();
+     const appwriteService = AppwriteService.getInstance();
       const reciprocalLikeCheck = await appwriteService.listDocuments(
         jwtToken,
         process.env.DB_COLLECTION_LIKES_ID,
@@ -871,7 +871,7 @@ class InteractionService {
   async unmatchUser(jwtToken, matchId, requestId, log) {
     try {
       const operationStart = Date.now();
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
 
       await appwriteService.deleteDocumentsWithAdminPrivileges(
         jwtToken,

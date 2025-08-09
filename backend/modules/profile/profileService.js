@@ -41,7 +41,7 @@ class ProfileService {
       this.validateProfileData(profileData);
       log(`[${requestId}] Validation passed for profile update`);
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
 
       // Prepare update data - only include fields that are provided
       const updateData = {};
@@ -174,7 +174,7 @@ class ProfileService {
         throw new AppError(ERROR_CODES.GOOGLE_VISION_API_ERROR, visionError.message, visionError);
       }
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
 
       // Get current profile to check existing photos
       let profile;
@@ -273,7 +273,7 @@ class ProfileService {
       this.validatePhotoKey(photoKey);
       log(`[${requestId}] Photo key validation passed`);
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
 
       // Get current profile to check existing photos
       let profile;
@@ -483,7 +483,7 @@ class ProfileService {
       const operationStart = Date.now();
       log(`[${requestId}] Starting getProfile for user: ${userId}`);
 
-      const appwriteService = new AppwriteService();
+      const appwriteService = AppwriteService.getInstance();
 
       // Get profile document
       let profile;

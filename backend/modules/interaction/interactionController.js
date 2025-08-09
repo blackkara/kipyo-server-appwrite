@@ -44,7 +44,7 @@ class InteractionController {
       let requestedUser;
 
       try {
-        const appwriteService = new AppwriteService();
+        const appwriteService = AppwriteService.getInstance();
         const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
 
         jwtToken = authResult.jwtToken;
@@ -143,7 +143,7 @@ class InteractionController {
       let requestedUser;
 
       try {
-        const appwriteService = new AppwriteService();
+        const appwriteService = AppwriteService.getInstance();
         const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
 
         jwtToken = authResult.jwtToken;
