@@ -19,7 +19,10 @@ class TimezoneResetUtil {
         isSuspiciousJump: false,
         isTimezoneChangeTooFrequently: false,
         isDailyMessagesResetTooFrequently: false,
-        hoursToWaitForTimezoneChange: null
+        hoursToWaitForTimezoneChange: null,
+        timezoneInfo: {
+          changed: false
+        }
       };
 
       // 1. TIMEZONE KONTROLÜ
@@ -67,7 +70,7 @@ class TimezoneResetUtil {
       result.hoursToWaitForTimezoneChange = this._getHoursToWait(profile, now);
     }
 
-    if (!result.isRequestedTimezoneValid && !result.isSuspiciousJump && !result.isTimezoneChangeTooFrequently) {
+    if (result.isRequestedTimezoneValid && !result.isSuspiciousJump && !result.isTimezoneChangeTooFrequently) {
       result.updateData.timezoneOffset = requestedTimezone;
       result.updateData.timezoneChangeDate = now.toISOString();
       result.updateData.timezoneTotalChanges = (profile.timezoneTotalChanges || 0) + 1;
