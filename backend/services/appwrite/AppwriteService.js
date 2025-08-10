@@ -274,20 +274,20 @@ class AppwriteService {
   // Admin Operations (Backward Compatibility)
   // ======================
   
-  async createDocumentWithAdminPrivileges(jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
+  async createDocumentWithAdminPrivileges(authToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
     return this.adminOps.createDocumentWithAdminPrivileges(
-      jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers
+      authToken, requestingUserId, collectionId, documentId, data, additionalUsers
     );
   }
 
-  async updateDocumentWithAdminPrivileges(jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
+  async updateDocumentWithAdminPrivileges(authToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
     return this.adminOps.updateDocumentWithAdminPrivileges(
-      jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers
+      authToken, requestingUserId, collectionId, documentId, data, additionalUsers
     );
   }
 
-  async deleteDocumentWithAdminPrivileges(jwtToken, collectionId, documentId) {
-    return this.adminOps.deleteDocumentWithAdminPrivileges(jwtToken, collectionId, documentId);
+  async deleteDocumentWithAdminPrivileges(authToken, collectionId, documentId) {
+    return this.adminOps.deleteDocumentWithAdminPrivileges(authToken, collectionId, documentId);
   }
 
   buildPermissions(ownerId, additionalUsers = []) {
@@ -295,8 +295,10 @@ class AppwriteService {
   }
 
   requireSystemUser(userInfo) {
+    // DEPRECATED: Now we check for API key usage instead
+    console.warn('requireSystemUser is deprecated. Admin operations now require API key authentication.');
     if (!userInfo.isSystemUser) {
-      throw new Error('Unauthorized: Admin privileges required');
+      throw new Error('Unauthorized: Admin privileges required (use API key instead of JWT)');
     }
   }
 

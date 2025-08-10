@@ -1,5 +1,6 @@
+import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import dialogService from './dialogService.js';
-import AppwriteService from '../../appwrite.js';
+
 
 class DialogController {
 

@@ -1,4 +1,4 @@
-import AppwriteService from '../../appwrite.js';
+import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import { generatePhotoUrls } from '../../utils/photoUtils.js';
 
 const { createQuery } = AppwriteService;

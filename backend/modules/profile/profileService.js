@@ -1,4 +1,4 @@
-import AppwriteService from '../../appwrite.js';
+import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { GoogleAuth } from "google-auth-library";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";

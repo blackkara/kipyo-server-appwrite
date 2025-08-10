@@ -9,9 +9,7 @@ import exploreRoutes from './modules/explore/exploreRoutes.js';
 import profileRoutes from './modules/profile/profileRoutes.js';
 import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js';
 
-import AppwriteService from './appwrite.js'
 
-const appwriteService = new AppwriteService();
 
 // const healthReport = await appwriteService.checkJWTHealth(jwtToken);
 // if (!healthReport.isValid) {

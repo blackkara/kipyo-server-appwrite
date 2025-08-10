@@ -1,4 +1,4 @@
-import AppwriteService from '../../appwrite.js';
+import AppwriteService from '../../services/appwrite/AppwriteService.js';
 
 const { createQuery } = AppwriteService;
 const Query = createQuery();

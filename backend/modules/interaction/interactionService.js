@@ -1,4 +1,4 @@
-import AppwriteService from '../../appwrite.js';
+import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import pushNotificationService from '../../pushNotificationsService.js';
 import { generatePhotoUrls } from '../../utils/photoUtils.js';
 import crypto from 'crypto';
@@ -400,22 +400,7 @@ class InteractionService {
   }
 
   async muteUser(jwtToken, senderId, receiverId, muted, requestId, log) {
-    try {
-      const operationStart = Date.now();
-
-      // TODO: Implement mute/unmute logic here
-      // For now, this is a placeholder
-      log(`[${requestId}] Mute operation (${muted ? 'mute' : 'unmute'}) - Implementation pending`);
-
-      const operationDuration = Date.now() - operationStart;
-      log(`[${requestId}] Mute operation completed in ${operationDuration}ms`);
-
-      return { action: 'pending_implementation', operationDuration };
-
-    } catch (error) {
-      log(`[${requestId}] ERROR in muteUser: ${error.message}`);
-      throw new Error(`Failed to ${muted ? 'mute' : 'unmute'} user: ${error.message}`);
-    }
+    // SOON..
   }
 
 
@@ -556,7 +541,7 @@ class InteractionService {
       const operationStart = Date.now();
 
       // Check if user already disliked this person
-  const appwriteService = AppwriteService.getInstance();
+      const appwriteService = AppwriteService.getInstance();
       const existingDislikes = await appwriteService.listDocuments(
         jwtToken,
         process.env.DB_COLLECTION_DISLIKES_ID,
@@ -629,7 +614,7 @@ class InteractionService {
   async likeUser(jwtToken, senderId, receiverId, requestId, log) {
     try {
       const operationStart = Date.now();
-     const appwriteService = AppwriteService.getInstance();
+      const appwriteService = AppwriteService.getInstance();
       const reciprocalLikeCheck = await appwriteService.listDocuments(
         jwtToken,
         process.env.DB_COLLECTION_LIKES_ID,

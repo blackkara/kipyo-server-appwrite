@@ -1,5 +1,5 @@
 import interactionService from './interactionService.js';
-import AppwriteService from '../../appwrite.js';
+import AppwriteService from '../../services/appwrite/AppwriteService.js';
 
 class InteractionController {
 
@@ -9,14 +9,6 @@ class InteractionController {
 
   async unblockUser(req, res) {
     return await this.handleInteraction(req, res, 'unblock');
-  }
-
-  async muteUser(req, res) {
-    return await this.handleInteraction(req, res, 'mute');
-  }
-
-  async unmuteUser(req, res) {
-    return await this.handleInteraction(req, res, 'unmute');
   }
 
   async likeUser(req, res) {
