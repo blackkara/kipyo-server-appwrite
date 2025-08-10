@@ -19,7 +19,7 @@ export class AdminOperations {
 
   /**
    * Create document with admin privileges
-   * @param {string} authToken - JWT token or API key
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} requestingUserId - User ID to set permissions for
    * @param {string} collectionId - Collection ID
    * @param {string} documentId - Document ID
@@ -28,7 +28,7 @@ export class AdminOperations {
    * @returns {Promise<Object>} - Created document
    */
   async createDocumentWithAdminPrivileges(
-    authToken,
+    jwtToken,
     requestingUserId,
     collectionId,
     documentId,
@@ -48,13 +48,12 @@ export class AdminOperations {
     };
 
     return this.executeAdminOperation(async () => {
-      // Validate that API key is being used (not JWT)
-      this.validateAdminAuth(authToken);
-      
+      // Note: We receive JWT for user context, but use API key internally for admin operations
       const permissions = this.buildPermissions(requestingUserId, additionalUsers);
       
-      this.log(`[ADMIN ACTION] Creating document in ${collectionId} with permissions:`, permissions);
+      this.log(`[ADMIN ACTION] Creating document in ${collectionId} with permissions for user ${requestingUserId}`);
 
+      // This uses API key internally (configured in environment)
       const databases = this.clientManager.getAdminDatabases();
       const databaseId = this.getDatabaseId();
       
@@ -80,7 +79,7 @@ export class AdminOperations {
 
   /**
    * Update document with admin privileges
-   * @param {string} authToken - JWT token or API key
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} requestingUserId - User ID to set permissions for
    * @param {string} collectionId - Collection ID
    * @param {string} documentId - Document ID
@@ -89,7 +88,7 @@ export class AdminOperations {
    * @returns {Promise<Object>} - Updated document
    */
   async updateDocumentWithAdminPrivileges(
-    authToken,
+    jwtToken,
     requestingUserId,
     collectionId,
     documentId,
@@ -109,13 +108,12 @@ export class AdminOperations {
     };
 
     return this.executeAdminOperation(async () => {
-      // Validate that API key is being used (not JWT)
-      this.validateAdminAuth(authToken);
-      
+      // Note: We receive JWT for user context, but use API key internally for admin operations
       const permissions = this.buildPermissions(requestingUserId, additionalUsers);
       
-      this.log(`[ADMIN ACTION] Updating document ${documentId} in ${collectionId}`);
+      this.log(`[ADMIN ACTION] Updating document ${documentId} in ${collectionId} for user ${requestingUserId}`);
 
+      // This uses API key internally (configured in environment)
       const databases = this.clientManager.getAdminDatabases();
       const databaseId = this.getDatabaseId();
       
@@ -141,12 +139,12 @@ export class AdminOperations {
 
   /**
    * Delete document with admin privileges
-   * @param {string} authToken - JWT token or API key
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} collectionId - Collection ID
    * @param {string} documentId - Document ID
    * @returns {Promise<Object>} - Deletion result
    */
-  async deleteDocumentWithAdminPrivileges(authToken, collectionId, documentId) {
+  async deleteDocumentWithAdminPrivileges(jwtToken, collectionId, documentId) {
     const context = {
       methodName: 'deleteDocumentWithAdminPrivileges',
       collectionId,
@@ -154,11 +152,10 @@ export class AdminOperations {
     };
 
     return this.executeAdminOperation(async () => {
-      // Validate that API key is being used (not JWT)
-      this.validateAdminAuth(authToken);
-      
+      // Note: We receive JWT for user context, but use API key internally for admin operations
       this.log(`[ADMIN ACTION] Deleting document ${documentId} in ${collectionId}`);
 
+      // This uses API key internally (configured in environment)
       const databases = this.clientManager.getAdminDatabases();
       const databaseId = this.getDatabaseId();
       
@@ -179,12 +176,12 @@ export class AdminOperations {
 
   /**
    * List all documents in collection with admin privileges
-   * @param {string} authToken - JWT token or API key
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} collectionId - Collection ID
    * @param {Array} queries - Query array
    * @returns {Promise<Object>} - Documents list
    */
-  async listAllDocuments(authToken, collectionId, queries = []) {
+  async listAllDocuments(jwtToken, collectionId, queries = []) {
     const context = {
       methodName: 'listAllDocuments',
       collectionId,
@@ -192,9 +189,7 @@ export class AdminOperations {
     };
 
     return this.executeAdminOperation(async () => {
-      // Validate that API key is being used (not JWT)
-      this.validateAdminAuth(authToken);
-      
+      // Note: We receive JWT for user context, but use API key internally for admin operations
       this.log(`[ADMIN ACTION] Listing all documents in ${collectionId}`);
 
       const databases = this.clientManager.getAdminDatabases();
@@ -212,12 +207,12 @@ export class AdminOperations {
 
   /**
    * Bulk update documents with admin privileges
-   * @param {string} authToken - JWT token or API key
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} collectionId - Collection ID
    * @param {Array} updates - Array of {documentId, data} objects
    * @returns {Promise<Object>} - Bulk update result
    */
-  async bulkUpdateDocuments(authToken, collectionId, updates) {
+  async bulkUpdateDocuments(jwtToken, collectionId, updates) {
     const context = {
       methodName: 'bulkUpdateDocuments',
       collectionId,
@@ -225,9 +220,7 @@ export class AdminOperations {
     };
 
     return this.executeAdminOperation(async () => {
-      // Validate that API key is being used (not JWT)
-      this.validateAdminAuth(authToken);
-      
+      // Note: We receive JWT for user context, but use API key internally for admin operations
       this.log(`[ADMIN ACTION] Bulk updating ${updates.length} documents in ${collectionId}`);
 
       const databases = this.clientManager.getAdminDatabases();
@@ -276,12 +269,12 @@ export class AdminOperations {
 
   /**
    * Bulk delete documents with admin privileges
-   * @param {string} authToken - JWT token or API key
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} collectionId - Collection ID
    * @param {Array} documentIds - Document IDs to delete
    * @returns {Promise<Object>} - Bulk deletion result
    */
-  async bulkDeleteDocuments(authToken, collectionId, documentIds) {
+  async bulkDeleteDocuments(jwtToken, collectionId, documentIds) {
     const context = {
       methodName: 'bulkDeleteDocuments',
       collectionId,
@@ -289,9 +282,7 @@ export class AdminOperations {
     };
 
     return this.executeAdminOperation(async () => {
-      // Validate that API key is being used (not JWT)
-      this.validateAdminAuth(authToken);
-      
+      // Note: We receive JWT for user context, but use API key internally for admin operations
       this.log(`[ADMIN ACTION] Bulk deleting ${documentIds.length} documents in ${collectionId}`);
 
       const databases = this.clientManager.getAdminDatabases();
@@ -336,13 +327,13 @@ export class AdminOperations {
 
   /**
    * Update document permissions
-   * @param {string} authToken - JWT token or API key
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} collectionId - Collection ID
    * @param {string} documentId - Document ID
    * @param {Array} permissions - New permissions
    * @returns {Promise<Object>} - Updated document
    */
-  async updateDocumentPermissions(authToken, collectionId, documentId, permissions) {
+  async updateDocumentPermissions(jwtToken, collectionId, documentId, permissions) {
     const context = {
       methodName: 'updateDocumentPermissions',
       collectionId,
@@ -351,9 +342,7 @@ export class AdminOperations {
     };
 
     return this.executeAdminOperation(async () => {
-      // Validate that API key is being used (not JWT)
-      this.validateAdminAuth(authToken);
-      
+      // Note: We receive JWT for user context, but use API key internally for admin operations
       this.log(`[ADMIN ACTION] Updating permissions for document ${documentId}`);
 
       const databases = this.clientManager.getAdminDatabases();
@@ -415,104 +404,23 @@ export class AdminOperations {
   }
 
   /**
-   * Validate admin authentication
-   * @private
-   * @param {string} authToken - Authentication token
-   * @throws {Error} - If not using API key
+   * Note: Admin operations explanation
+   * 
+   * These methods receive JWT tokens for user identification/context,
+   * but internally use API key (configured via APPWRITE_DEV_KEY) 
+   * to perform privileged operations through getAdminDatabases().
+   * 
+   * This allows regular users to trigger admin operations (if allowed by your business logic)
+   * while the actual database operations are performed with admin privileges.
+   * 
+   * The JWT is used for:
+   * - Tracking who initiated the action
+   * - Setting appropriate permissions for the requesting user
+   * 
+   * The API key is used for:
+   * - Actually performing the database operations with elevated privileges
+   * - Bypassing normal user permission restrictions
    */
-  validateAdminAuth(authToken) {
-    if (!authToken) {
-      throw new Error('Authentication token is required for admin operations');
-    }
-
-    // Check if it's a JWT token (has 3 parts separated by dots)
-    const isJWT = authToken.split('.').length === 3;
-    
-    if (isJWT) {
-      throw new Error('Admin operations require API key authentication, not JWT');
-    }
-
-    // Additional validation: Check if API key is configured
-    const apiKey = this.config ? 
-      this.config.get('appwrite.apiKey') : 
-      process.env.APPWRITE_DEV_KEY;
-    
-    if (!apiKey) {
-      throw new Error('API key not configured for admin operations');
-    }
-
-    // Optional: Validate that the provided token matches the configured API key
-    // This depends on your security requirements
-    if (authToken !== apiKey) {
-      throw new Error('Invalid API key for admin operations');
-    }
-
-    return true;
-  }
-
-  /**
-   * Check if authentication is for admin operations
-   * @param {string} authToken - Authentication token
-   * @returns {boolean} - True if API key, false if JWT
-   */
-  isAdminAuth(authToken) {
-    if (!authToken) return false;
-    
-    // JWT tokens have 3 parts separated by dots
-    const isJWT = authToken.split('.').length === 3;
-    
-    // If not JWT, assume it's an API key
-    return !isJWT;
-  }
-
-  /**
-   * DEPRECATED: Old admin user validation method
-   * @private
-   * @deprecated Use validateAdminAuth instead
-   */
-  async validateAdminUser(jwtToken) {
-    // This method is deprecated but kept for potential backward compatibility
-    // Now we validate based on API key usage, not user status
-    console.warn('validateAdminUser is deprecated. Admin operations now require API key authentication.');
-    
-    // For backward compatibility, just validate it's not a JWT
-    this.validateAdminAuth(jwtToken);
-    
-    // Return a mock admin user object for compatibility
-    return {
-      userId: 'admin',
-      isSystemUser: true,
-      email: 'admin@system'
-    };
-  }
-
-  /**
-   * DEPRECATED: Check if user is system/admin user
-   * @private
-   * @deprecated Admin status is now determined by API key usage
-   */
-  isSystemUser(userInfo) {
-    // This method is deprecated
-    // Admin privileges are now determined by using API key instead of JWT
-    console.warn('isSystemUser is deprecated. Admin operations now require API key authentication.');
-    return false;
-  }
-
-  /**
-   * DEPRECATED: Get basic user info without validator
-   * @private
-   * @deprecated Not needed anymore as we don't validate user for admin ops
-   */
-  async getBasicUserInfo(jwtToken) {
-    // This method is no longer needed for admin operations
-    console.warn('getBasicUserInfo is deprecated for admin operations.');
-    
-    // Return mock data for compatibility
-    return {
-      userId: 'admin',
-      email: 'admin@system'
-    };
-  }
 
   /**
    * Execute admin operation with retry and performance tracking

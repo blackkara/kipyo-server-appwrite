@@ -274,20 +274,20 @@ class AppwriteService {
   // Admin Operations (Backward Compatibility)
   // ======================
   
-  async createDocumentWithAdminPrivileges(authToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
+  async createDocumentWithAdminPrivileges(jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
     return this.adminOps.createDocumentWithAdminPrivileges(
-      authToken, requestingUserId, collectionId, documentId, data, additionalUsers
+      jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers
     );
   }
 
-  async updateDocumentWithAdminPrivileges(authToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
+  async updateDocumentWithAdminPrivileges(jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
     return this.adminOps.updateDocumentWithAdminPrivileges(
-      authToken, requestingUserId, collectionId, documentId, data, additionalUsers
+      jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers
     );
   }
 
-  async deleteDocumentWithAdminPrivileges(authToken, collectionId, documentId) {
-    return this.adminOps.deleteDocumentWithAdminPrivileges(authToken, collectionId, documentId);
+  async deleteDocumentWithAdminPrivileges(jwtToken, collectionId, documentId) {
+    return this.adminOps.deleteDocumentWithAdminPrivileges(jwtToken, collectionId, documentId);
   }
 
   buildPermissions(ownerId, additionalUsers = []) {
@@ -295,10 +295,10 @@ class AppwriteService {
   }
 
   requireSystemUser(userInfo) {
-    // DEPRECATED: Now we check for API key usage instead
-    console.warn('requireSystemUser is deprecated. Admin operations now require API key authentication.');
+    // DEPRECATED: Admin operations now use API key internally, not user status
+    console.warn('requireSystemUser is deprecated. Admin operations use API key internally regardless of user status.');
     if (!userInfo.isSystemUser) {
-      throw new Error('Unauthorized: Admin privileges required (use API key instead of JWT)');
+      throw new Error('Unauthorized: Admin privileges required');
     }
   }
 

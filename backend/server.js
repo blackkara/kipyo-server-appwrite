@@ -7,29 +7,17 @@ import interactionRoutes from './modules/interaction/interactionRoutes.js';
 import matchRoutes from './modules/match/matchRoutes.js';
 import exploreRoutes from './modules/explore/exploreRoutes.js';
 import profileRoutes from './modules/profile/profileRoutes.js';
-import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js';
+import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js'
 
-
-
-// const healthReport = await appwriteService.checkJWTHealth(jwtToken);
-// if (!healthReport.isValid) {
-//   console.log('JWT Issues:', healthReport.errors);
-//   console.log('Recommendations:', healthReport.recommendations);
-// }
-
-// // Full diagnostics
-// const diagnostics = await appwriteService.getJWTDiagnostics(jwtToken);
-// console.log('JWT Diagnostics:', diagnostics);
-
-// Cache monitoring
+import AppwriteService from './services/appwrite/AppwriteService.js';
+const appwriteService = AppwriteService.getInstance();
 setInterval(() => {
-  const stats = appwriteService.getCacheStats();
-  console.log('Connection Cache:', stats);
-}, 30000); // 30 seconds
+  const cacheStats = appwriteService.getCacheStats();
+  console.log('Connection Cache:', cacheStats);
+}, 5000); // 5 seconds
 
 
 import { initializeApp, cert } from 'firebase-admin/app';
-import { getMessaging } from 'firebase-admin/messaging';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
