@@ -156,7 +156,7 @@ export const TRACKING_EVENTS = {
   USER_AUTHENTICATED: 'user_authenticated',
   JWT_VALIDATION_FAILED: 'jwt_validation_failed',
   JWT_HEALTH_CHECK: 'jwt_health_check',
-  
+
   // Document Events
   DOCUMENTS_LISTED: 'documents_listed',
   DOCUMENT_RETRIEVED: 'document_retrieved',
@@ -164,22 +164,23 @@ export const TRACKING_EVENTS = {
   DOCUMENT_UPDATED: 'document_updated',
   DOCUMENT_DELETED: 'document_deleted',
   USER_DOCUMENTS_BULK_DELETED: 'user_documents_bulk_deleted',
-  
+
   // Admin Events
   ADMIN_DOCUMENT_CREATED: 'admin_document_created',
   ADMIN_DOCUMENT_UPDATED: 'admin_document_updated',
   ADMIN_DOCUMENT_DELETED: 'admin_document_deleted',
-  
+
   // Network Events
   NETWORK_RETRY_SUCCESS: 'network_retry_success',
   NETWORK_ERROR: 'network_error',
   CONNECTION_TEST: 'connection_test',
-  
+
   // Cache Events
   CLIENT_CACHE_EVICTION: 'client_cache_eviction',
   CACHE_HIT: 'cache_hit',
   CACHE_MISS: 'cache_miss'
 };
+
 
 // Default Export for backward compatibility
 export default {
@@ -196,5 +197,5 @@ export default {
   USAGE_FREQUENCY,
   MEMORY_THRESHOLDS,
   ERROR_CATEGORIES,
-  TRACKING_EVENTS
+  TRACKING_EVENTS,
 };

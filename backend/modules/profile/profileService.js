@@ -9,7 +9,9 @@ import { readFileSync } from 'fs';
 
 import { ERROR_CODES, AppError } from '../../utils/errorConstants.js';
 import { generatePhotoUrl, generatePhotoUrls } from '../../utils/photoUtils.js';
-import TimezoneResetUtil from '../../utils/timezoneResetUtil.js';
+
+import TimezoneValidationTool from '../../utils/TimezoneValidationTool.js';
+import ProfileUtils from './utils/ProfileUtils.js';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -512,31 +514,34 @@ class ProfileService {
 
       let updatedProfile = profile;
       let timezoneResult = null;
+      const updateData = {};
 
-      // Eğer requestedTimezone varsa, timezone/reset kontrolü yap
+      let currentTimezoneOffset = profile.timezoneOffset;
+      let timezoneChangeDate = profile.timezoneChangeDate || null;
+      let timezoneTotalChanges = profile.timezoneTotalChanges || 0;
+
+
       if (requestedTimezone) {
         try {
-          log(`[${requestId}] Processing timezone/reset check - Requested: ${requestedTimezone}`);
-
-          timezoneResult = await TimezoneResetUtil.processTimezoneAndReset(
-            profile,
+          log(`[${requestId}] Processing timezone check - Requested: ${requestedTimezone}`);
+          timezoneResult = await TimezoneValidationTool.validateTimezoneChange(
+            currentTimezoneOffset,
             requestedTimezone,
+            timezoneChangeDate,
+            timezoneTotalChanges,
             requestId,
             log
           );
 
           // Eğer update gerekiyorsa, veritabanını güncelle
-          if (timezoneResult.updateData && Object.keys(timezoneResult.updateData).length > 0) {
-            log(`[${requestId}] Updating profile with timezone/reset data`);
+          if (timezoneResult.shouldChangeTimezone) {
+            currentTimezoneOffset = timezoneResult.acceptedTimezone;
+            timezoneChangeDate = new Date().toISOString();
+            timezoneTotalChanges = (profile.timezoneTotalChanges || 0) + 1;
 
-            updatedProfile = await appwriteService.updateDocument(
-              jwtToken,
-              process.env.DB_COLLECTION_PROFILES_ID,
-              userId,
-              timezoneResult.updateData
-            );
-
-            log(`[${requestId}] Profile updated successfully`);
+            updateData.timezoneOffset = currentTimezoneOffset;
+            updateData.timezoneChangeDate = timezoneChangeDate;
+            updateData.timezoneTotalChanges = timezoneTotalChanges;
           }
 
         } catch (timezoneError) {
@@ -546,8 +551,37 @@ class ProfileService {
         }
       }
 
+      const resetResult = ProfileUtils.validateDailyReset(
+        currentTimezoneOffset,
+        timezoneChangeDate,
+        updatedProfile.dailyMessageRemaining,
+        requestId,
+        log
+      );
 
-      Object.assign(updatedProfile, { profileCompletionPercentage: this.calculateProfileCompletion(profile) });
+      if (resetResult.shouldReset) {
+        updateData.dailyMessageRemaining = resetResult.newMessageCount;
+        updateData.dailyMessageResetDate = new Date().toISOString();
+        log(`[${requestId}] Daily reset should be performed - resetting message count to ${resetResult.newMessageCount}`);
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        updatedProfile = await appwriteService.updateDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_PROFILES_ID,
+          userId,
+          updateData
+        );
+
+        log(`[${requestId}] Profile updated with timezone and reset data`);
+      }
+
+      // ===========================================
+      // PROFİLE KOMPLETLEŞME ORANINI HESAPLA (YENİ)
+      // ===========================================
+
+      const profileCompletionStats = ProfileUtils.getProfileCompletionDetails(updatedProfile);
+      Object.assign(updatedProfile, { profileCompletionStats: profileCompletionStats });
 
       const operationDuration = Date.now() - operationStart;
       log(`[${requestId}] Profile retrieved successfully in ${operationDuration}ms`);
@@ -620,87 +654,6 @@ class ProfileService {
     }
   }
 
-  calculateProfileCompletion(profile) {
-    try {
-      // ProfileDto'daki alanları baz alarak hesaplama
-      const requiredFields = [
-        'username', // ProfileDto'da required
-        'birthDate', // ProfileDto'da required
-        'gender', // ProfileDto'da required
-        'photos' // En az 1 fotoğraf olmalı
-      ];
-
-      const importantFields = [
-        'about', // ProfileDto'da optional ama önemli
-        'passions', // İlgi alanları
-        'relationGoal' // Ne arıyor
-      ];
-
-      const optionalFields = [
-        'habits', // Alışkanlıklar
-        'relationStatus', // İlişki durumu
-        'height' // Boy
-      ];
-
-      let completedRequired = 0;
-      let completedImportant = 0;
-      let completedOptional = 0;
-
-      // Check required fields (50% weight)
-      requiredFields.forEach(field => {
-        if (field === 'photos') {
-          // Photos için en az 1 fotoğraf olmalı
-          if (profile[field] && Array.isArray(profile[field]) && profile[field].length > 0) {
-            completedRequired++;
-          }
-        } else if (profile[field]) {
-          if (typeof profile[field] === 'string' && profile[field].trim() !== '') {
-            completedRequired++;
-          } else if (profile[field] !== null && profile[field] !== undefined) {
-            completedRequired++;
-          }
-        }
-      });
-
-      // Check important fields (35% weight)
-      importantFields.forEach(field => {
-        if (profile[field]) {
-          if (Array.isArray(profile[field])) {
-            if (profile[field].length > 0) completedImportant++;
-          } else if (typeof profile[field] === 'string') {
-            if (profile[field].trim() !== '') completedImportant++;
-          } else {
-            completedImportant++;
-          }
-        }
-      });
-
-      // Check optional fields (15% weight)
-      optionalFields.forEach(field => {
-        if (profile[field]) {
-          if (Array.isArray(profile[field])) {
-            if (profile[field].length > 0) completedOptional++;
-          } else if (typeof profile[field] === 'string') {
-            if (profile[field].trim() !== '') completedOptional++;
-          } else if (typeof profile[field] === 'number' && profile[field] > 0) {
-            completedOptional++;
-          }
-        }
-      });
-
-      // Calculate weighted percentage
-      const requiredPercentage = (completedRequired / requiredFields.length) * 50;
-      const importantPercentage = (completedImportant / importantFields.length) * 35;
-      const optionalPercentage = (completedOptional / optionalFields.length) * 15;
-
-      const totalPercentage = requiredPercentage + importantPercentage + optionalPercentage;
-
-      return Math.round(Math.min(100, totalPercentage)); // Max 100%
-
-    } catch (error) {
-      return 0; // Return 0 if calculation fails
-    }
-  }
 }
 
 export default new ProfileService();
