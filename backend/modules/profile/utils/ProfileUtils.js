@@ -30,7 +30,11 @@ class ProfileUtils {
         todayInUserTimezone: null,
         lastResetDateInUserTimezone: null,
         currentMessageCount: currentMessageCount,
-        newMessageCount: null
+        newMessageCount: null,
+        expectedResetDate: null,
+        expectedResetDateISO: null,
+        hoursUntilReset: null,
+        timeUntilReset: null
       };
 
       // Get today's date in user's timezone
@@ -45,6 +49,12 @@ class ProfileUtils {
       // Check if reset timing is valid (not too frequent)
       result.isValidResetTime = this._isValidResetTime(lastResetDate, now);
 
+      // Calculate next reset time information
+      result.expectedResetDate = this.getNextResetTime(timezoneOffset);
+      result.expectedResetDateISO = result.expectedResetDate.toISOString();
+      result.hoursUntilReset = this.getHoursUntilNextReset(timezoneOffset);
+      result.timeUntilReset = this.getTimeUntilNextReset(timezoneOffset);
+
       // Final decision
       result.shouldReset = result.isResetNeeded && result.isValidResetTime;
 
@@ -52,12 +62,15 @@ class ProfileUtils {
       if (result.shouldReset) {
         result.newMessageCount = RESET_CONFIG.DAILY_MESSAGE_LIMIT;
         log(`[${requestId}] Daily reset should be performed - messages: ${currentMessageCount} → ${result.newMessageCount}`);
+        log(`[${requestId}] Next reset expected at: ${result.expectedResetDateISO}`);
       } else if (result.isResetNeeded && !result.isValidResetTime) {
         result.newMessageCount = currentMessageCount; // Keep current
         log(`[${requestId}] Daily reset needed but too frequent - keeping current: ${currentMessageCount}`);
+        log(`[${requestId}] Next reset expected at: ${result.expectedResetDateISO}`);
       } else {
         result.newMessageCount = currentMessageCount; // Keep current
         log(`[${requestId}] Daily reset not needed - keeping current: ${currentMessageCount}`);
+        log(`[${requestId}] Next reset expected at: ${result.expectedResetDateISO} (${result.timeUntilReset.text} remaining)`);
       }
 
       log(`[${requestId}] Daily reset validation completed`);

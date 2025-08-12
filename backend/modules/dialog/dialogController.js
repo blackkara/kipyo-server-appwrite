@@ -1,47 +1,17 @@
-import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import dialogService from './dialogService.js';
-
 
 class DialogController {
 
   async initDialog(req, res) {
-    const startTime = Date.now();
-    const requestId = Math.random().toString(36).substring(7);
+    const { startTime, requestId, jwtToken, requestedUser } = req;
     const log = (message) => console.log(message);
     const error = (message, err) => console.error(message, err);
 
     try {
       log(`[${requestId}] Dialog request started`);
-
-      let jwtToken;
-      let requestedUser;
-
-      try {
-         const appwriteService = AppwriteService.getInstance();
-        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
-
-        jwtToken = authResult.jwtToken;
-        requestedUser = authResult.userInfo;
-
-      } catch (tokenError) {
-        log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
-        const duration = Date.now() - startTime;
-
-        return res.status(401).json({
-          success: false,
-          code: 401,
-          type: 'general_unauthorized',
-          message: tokenError.message,
-          requestId: requestId,
-          duration: duration
-        });
-      }
-
       const { userId, occupantId } = req.body;
 
       log(`[${requestId}] Request params: userId=${userId}, occupantId=${occupantId}, requesterId=${requestedUser.$id}`);
-
-      // Service call
       const dialog = await dialogService.initDialog(
         userId,
         occupantId,
@@ -106,6 +76,41 @@ class DialogController {
         requestId: requestId,
         duration: duration
       });
+    }
+  }
+
+  async createDirectDialog(req, res) {
+    const { startTime, requestId, jwtToken, requestedUser } = req;
+    const log = (message) => console.log(message);
+    const error = (message, err) => console.error(message, err);
+    try {
+      log(`[${requestId}] Dialog request started`);
+      const { userId, occupantId } = req.body;
+
+      log(`[${requestId}] Request params: userId=${userId}, occupantId=${occupantId}, requesterId=${requestedUser.$id}`);
+      const dialog = await dialogService.createDirectDialog(
+        userId,
+        occupantId,
+        jwtToken,
+        requestId,
+        log
+      );
+
+      const duration = Date.now() - startTime;
+      log(`[${requestId}] Request completed successfully in ${duration}ms`);
+
+      return res.status(200).json({
+        success: true,
+        code: 200,
+        message: 'Direct dialog created successfully',
+        data: { dialog },
+        requestId: requestId,
+        duration: duration
+      });
+    } catch (serviceError) {
+      const duration = Date.now() - startTime;
+      error(`[${requestId}] Request failed after ${duration}ms:`, serviceError);
+      log(`[${requestId}] ERROR Details: ${serviceError.message}`);
     }
   }
 }

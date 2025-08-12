@@ -551,7 +551,7 @@ class ProfileService {
         }
       }
 
-      const resetResult = ProfileUtils.validateDailyReset(
+      const resetStats = ProfileUtils.validateDailyReset(
         currentTimezoneOffset,
         timezoneChangeDate,
         updatedProfile.dailyMessageRemaining,
@@ -559,10 +559,10 @@ class ProfileService {
         log
       );
 
-      if (resetResult.shouldReset) {
-        updateData.dailyMessageRemaining = resetResult.newMessageCount;
+      if (resetStats.shouldReset) {
+        updateData.dailyMessageRemaining = resetStats.newMessageCount;
         updateData.dailyMessageResetDate = new Date().toISOString();
-        log(`[${requestId}] Daily reset should be performed - resetting message count to ${resetResult.newMessageCount}`);
+        log(`[${requestId}] Daily reset should be performed - resetting message count to ${resetStats.newMessageCount}`);
       }
 
       if (Object.keys(updateData).length > 0) {
@@ -582,6 +582,7 @@ class ProfileService {
 
       const profileCompletionStats = ProfileUtils.getProfileCompletionDetails(updatedProfile);
       Object.assign(updatedProfile, { profileCompletionStats: profileCompletionStats });
+      Object.assign(updatedProfile, { resetStats: resetStats });
 
       const operationDuration = Date.now() - operationStart;
       log(`[${requestId}] Profile retrieved successfully in ${operationDuration}ms`);

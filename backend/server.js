@@ -9,6 +9,8 @@ import exploreRoutes from './modules/explore/exploreRoutes.js';
 import profileRoutes from './modules/profile/profileRoutes.js';
 import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js'
 
+import authenticateUser from './utils/middleware/authAppwrite.js';
+
 import AppwriteService from './services/appwrite/AppwriteService.js';
 const appwriteService = AppwriteService.getInstance();
 setInterval(() => {
@@ -85,7 +87,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+app.use('/api', authenticateUser);
 app.use('/api', dialogRoutes);
 app.use('/api', exploreRoutes);
 app.use('/api', interactionRoutes);

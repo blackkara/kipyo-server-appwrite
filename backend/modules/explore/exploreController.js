@@ -4,43 +4,15 @@ import AppwriteService from '../../services/appwrite/AppwriteService.js';
 class ExploreController {
 
   async getCards(req, res) {
-    const startTime = Date.now();
-    const requestId = Math.random().toString(36).substring(7);
+    const { startTime, requestId, jwtToken, requestedUser } = req;
     const log = (message) => console.log(message);
     const error = (message, err) => console.error(message, err);
 
     try {
       log(`[${requestId}] Get cards request started`);
-
-      let jwtToken;
-      let requestedUser;
-      
-      try {
-         const appwriteService = AppwriteService.getInstance();
-        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
-
-        jwtToken = authResult.jwtToken;
-        requestedUser = authResult.userInfo;
-
-      } catch (tokenError) {
-        log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
-        const duration = Date.now() - startTime;
-        
-        return res.status(401).json({
-          success: false,
-          code: 401,
-          type: 'general_unauthorized',
-          message: tokenError.message,
-          requestId: requestId,
-          duration: duration
-        });
-      }
-
       const { limit = 10, offset = 0 } = req.query;
 
       log(`[${requestId}] Request params: userId=${requestedUser.$id}, limit=${limit}, offset=${offset}`);
-
-      // Service call
       const result = await exploreService.getSwipeCards(
         requestedUser,
         jwtToken,
