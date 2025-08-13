@@ -551,19 +551,23 @@ class ProfileService {
         }
       }
 
+      log(`[${requestId}] GetProfile pre validation - Remaining direct messages: ${profile.dailyMessageRemaining}`);
       const resetStats = ProfileUtils.validateDailyReset(
         currentTimezoneOffset,
-        timezoneChangeDate,
+        updatedProfile.dailyMessageResetDate,
         updatedProfile.dailyMessageRemaining,
         requestId,
         log
       );
+      log(`[${requestId}] GetProfile after validation - Remaining direct messages: ${resetStats.newMessageCount}`);
 
       if (resetStats.shouldReset) {
         updateData.dailyMessageRemaining = resetStats.newMessageCount;
         updateData.dailyMessageResetDate = new Date().toISOString();
         log(`[${requestId}] Daily reset should be performed - resetting message count to ${resetStats.newMessageCount}`);
       }
+
+
 
       if (Object.keys(updateData).length > 0) {
         updatedProfile = await appwriteService.updateDocument(
@@ -657,16 +661,19 @@ class ProfileService {
 
   async useDirectMessageIfExists(jwtToken, userId, requestId, log, requestedTimezone = null) {
     try {
-      const result = { usedDirectMessageCount: 0, remainingDirectMessageCount: 0 };
-      const profile = await this.getProfile(jwtToken, userId, requestId, log, requestedTimezone);
-      if (profile.resetStats.newMessageCount < 1) {
+      const result = { usedDirectMessageCount: 0, remainingDirectMessages: 0, profile: null };
+      result.profile = await this.getProfile(jwtToken, userId, requestId, log, requestedTimezone);
+      log(`[${requestId}] USAGE - Remaining direct messages: ${result.profile.resetStats.newMessageCount}`);
+
+      if (result.profile.resetStats.newMessageCount < 1) {
         return result; // No direct messages available
       } else {
         result.usedDirectMessageCount = 1;
-        result.remainingDirectMessageCount = profile.resetStats.newMessageCount - 1;
+        result.remainingDirectMessages = result.profile.resetStats.newMessageCount - 1;
       }
 
-      const updateData = { dailyMessageRemaining: profile.resetStats.newMessageCount - 1 };
+
+      const updateData = { dailyMessageRemaining: result.profile.resetStats.newMessageCount - 1 };
       const appwriteService = AppwriteService.getInstance();
       const updatedProfile = await appwriteService.updateDocument(
         jwtToken,

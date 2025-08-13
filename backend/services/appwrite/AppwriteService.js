@@ -26,6 +26,10 @@ import { ErrorAnalyzer } from './monitoring/ErrorAnalyzer.js';
 import { PerformanceMonitor } from './monitoring/PerformanceMonitor.js';
 import { HealthChecker } from './monitoring/HealthChecker.js';
 
+// Messaging modules
+import { NotificationService } from './messaging/NotificationService.js';
+import { NotificationTemplates } from './messaging/NotificationTemplates.js';
+
 // Utils
 import { RetryManager } from './utils/RetryManager.js';
 import NetworkUtils from './utils/NetworkUtils.js';
@@ -133,6 +137,18 @@ class AppwriteService {
       postHogService: this.postHog,
       configManager: this.configManager
     });
+    
+    // Messaging modules
+    this.notificationService = new NotificationService({
+      logger: this.log,
+      clientManager: this.clientManager,
+      performanceMonitor: this.performanceMonitor,
+      errorAnalyzer: this.errorAnalyzer,
+      postHogService: this.postHog,
+      configManager: this.configManager
+    });
+    
+    this.notificationTemplates = new NotificationTemplates(this.notificationService);
   }
 
   // ======================
@@ -404,6 +420,42 @@ class AppwriteService {
 
   static createRole() {
     return Role;
+  }
+
+  // ======================
+  // Notification Operations (Backward Compatibility)
+  // ======================
+  
+  async sendNotification(title, body, userIds, data = {}, options = {}) {
+    return this.notificationService.sendToUsers(title, body, userIds, data, options);
+  }
+
+  async sendMatchNotification(userId1, userId2, matchData) {
+    return this.notificationTemplates.sendMatchNotification(userId1, userId2, matchData);
+  }
+
+  async sendLikeNotification(likerId, likedId, likerName) {
+    return this.notificationTemplates.sendLikeNotification(likerId, likedId, likerName);
+  }
+
+  async sendMessageNotification(senderId, receiverId, senderName, messagePreview) {
+    return this.notificationTemplates.sendMessageNotification(senderId, receiverId, senderName, messagePreview);
+  }
+
+  async sendDirectMessageNotification(senderId, receiverId, senderName, messagePreview, directMessageData = {}) {
+    return this.notificationTemplates.sendDirectMessageNotification(senderId, receiverId, senderName, messagePreview, directMessageData);
+  }
+
+  async sendTopicNotification(topic, title, body, data = {}, options = {}) {
+    return this.notificationService.sendToTopics([topic], title, body, data, options);
+  }
+
+  async sendBatchNotifications(notifications) {
+    return this.notificationService.sendBatch(notifications);
+  }
+
+  getNotificationStatistics() {
+    return this.notificationService.getStatistics();
   }
 
   // ======================

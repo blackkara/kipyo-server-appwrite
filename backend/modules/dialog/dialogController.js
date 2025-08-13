@@ -88,7 +88,7 @@ class DialogController {
       const { userId, occupantId } = req.body;
 
       log(`[${requestId}] Request params: userId=${userId}, occupantId=${occupantId}, requesterId=${requestedUser.$id}`);
-      const dialog = await dialogService.createDirectDialog(
+      const result = await dialogService.createDirectDialog(
         userId,
         occupantId,
         jwtToken,
@@ -103,7 +103,7 @@ class DialogController {
         success: true,
         code: 200,
         message: 'Direct dialog created successfully',
-        data: { dialog },
+        data: result,
         requestId: requestId,
         duration: duration
       });

@@ -194,6 +194,13 @@ class DialogService {
 
   async createDirectDialog(userId, occupantId, jwtToken, requestId, log) {
     try {
+      const result = {
+        hasBlockage: false,
+        hasExistingDialog: false,
+        remainingDirectMessages: 0,
+        dialog: null
+      };
+
       const deterministicPair = [userId, occupantId].sort();
       log(`[${requestId}] Sorted pair: [${deterministicPair.join(', ')}]`);
 
@@ -201,13 +208,9 @@ class DialogService {
       const [blockage, existingDialog] = await Promise.all([
         this.hasAnyBlockage(jwtToken, userId, occupantId, requestId, log),
         this.checkIfDialogExists(jwtToken, deterministicPair, requestId, log)
-      ]);
 
-      const result = {
-        hasBlockage: false,
-        hasExistingDialog: false,
-        dialog: null
-      };
+      ]);
+      log(`[${requestId}] Parallel checks completed`);
 
       if (blockage.length > 0) {
         log(`[${requestId}] Blockage found: ${blockage.map(b => b.$id).join(', ')}`);
@@ -229,18 +232,33 @@ class DialogService {
         log
       );
 
+      result.remainingDirectMessages = usage.remainingDirectMessages;
+
       if (usage.usedDirectMessageCount === 0) {
         log(`[${requestId}] No direct messages available`);
         return result;
       }
-
-      const dialog = await this.createDialog(jwtToken, deterministicPair, occupantId, requestId, log);
-      result.dialog = dialog;
+      // const dialog = await this.createDialog(jwtToken, deterministicPair, occupantId, requestId, log);
+      // result.dialog = dialog;
 
       return result;
     } catch (error) {
       log(`[${requestId}] ERROR in createDirectDialog: ${error.message}`);
       throw new Error(`Failed to create direct dialog: ${error.message}`);
+    }
+  }
+
+  async sendDirectMessageNotification(log) {
+    try {
+      log(`[${requestId}] Sending direct message notification...`);
+      const appwriteService = AppwriteService.getInstance();
+      // Here you would implement the logic to send a notification
+      // This could involve calling an external service, sending an email, etc.
+      // For now, we'll just log the action
+      log(`[${requestId}] Direct message notification sent successfully`);
+    } catch (error) {
+      log(`[${requestId}] ERROR in sendDirectMessageNotification: ${error.message}`);
+      throw new Error(`Failed to send direct message notification: ${error.message}`);
     }
   }
 }

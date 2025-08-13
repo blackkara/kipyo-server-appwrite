@@ -7,6 +7,7 @@ export const NOTIFICATION_TYPES = {
   MATCH: 'match',
   LIKE: 'like',
   MESSAGE: 'message',
+  DIRECT_MESSAGE: 'direct_message',  // Special message without match/like
   SYSTEM: 'system',
   PROMOTION: 'promotion',
   REMINDER: 'reminder',
@@ -61,6 +62,10 @@ export const NOTIFICATION_TEMPLATES = {
   MESSAGE: {
     title: "New message from {senderName}",
     body: "{messagePreview}"
+  },
+  DIRECT_MESSAGE: {
+    title: "Direct Message 💬",
+    body: "{senderName} sent you a direct message!"
   },
   SYSTEM: {
     title: "System Notification",

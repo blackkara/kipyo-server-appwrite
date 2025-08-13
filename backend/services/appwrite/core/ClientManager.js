@@ -136,11 +136,11 @@ export class ClientManager {
   }
 
   /**
-   * Get admin Databases instance
-   * @returns {Databases} - Admin databases instance
+   * Get admin client instance
+   * @returns {Client} - Admin client instance
    */
-  getAdminDatabases() {
-    const context = { methodName: 'getAdminDatabases' };
+  getAdminClient() {
+    const context = { methodName: 'getAdminClient' };
 
     try {
       const apiKey = this.config ? 
@@ -165,11 +165,59 @@ export class ClientManager {
           .setEndpoint(endpoint)
           .setProject(projectId)
           .setKey(apiKey);
-          
-        this.adminDatabases = new Databases(this.adminClient);
         
         this.log('Admin client created');
       }
+
+      return this.adminClient;
+    } catch (error) {
+      this.log('Failed to get admin client:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get admin Databases instance
+   * @returns {Databases} - Admin databases instance
+   */
+  getAdminDatabases() {
+    const context = { methodName: 'getAdminDatabases' };
+
+    try {
+      const apiKey = this.config ? 
+        this.config.get('appwrite.apiKey') : 
+        process.env.APPWRITE_DEV_KEY;
+
+      if (!apiKey) {
+        throw new Error('APPWRITE_DEV_KEY is not configured');
+      }
+
+      // Check if adminDatabases already exists and return it
+      if (this.adminDatabases) {
+        return this.adminDatabases;
+      }
+
+      // If not, create admin client if needed
+      if (!this.adminClient) {
+        const endpoint = this.config ? 
+          this.config.get('appwrite.endpoint') : 
+          process.env.APPWRITE_END_POINT;
+          
+        const projectId = this.config ? 
+          this.config.get('appwrite.projectId') : 
+          process.env.APPWRITE_PROJECT_ID;
+
+        this.adminClient = new Client()
+          .setEndpoint(endpoint)
+          .setProject(projectId)
+          .setKey(apiKey);
+        
+        this.log('Admin client created');
+      }
+      
+      // Now create adminDatabases
+      this.adminDatabases = new Databases(this.adminClient);
+      this.log('Admin databases instance created');
 
       return this.adminDatabases;
     } catch (error) {

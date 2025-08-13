@@ -87,6 +87,24 @@ class PushNotificationService {
   }
 
   /**
+   * Send direct message notification - Special privilege message
+   */
+  async sendDirectMessageNotification(senderId, receiverId, senderName, messagePreview, remainingCount = null) {
+    const directMessageData = {
+      conversationId: `direct_${[senderId, receiverId].sort().join('_')}`,
+      remainingCount
+    };
+    
+    return this.templates.sendDirectMessageNotification(
+      senderId,
+      receiverId,
+      senderName,
+      messagePreview,
+      directMessageData
+    );
+  }
+
+  /**
    * Send to topic - Backward compatible method
    */
   async sendToTopic(topic, title, body, data = {}, options = {}) {

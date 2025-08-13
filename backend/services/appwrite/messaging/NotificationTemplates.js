@@ -94,6 +94,51 @@ export class NotificationTemplates {
   }
 
   /**
+   * Send notification for direct message (special privilege message without match/like)
+   * @param {string} senderId - Message sender ID
+   * @param {string} receiverId - Message receiver ID
+   * @param {string} senderName - Sender name
+   * @param {string} messagePreview - Message preview text
+   * @param {Object} directMessageData - Direct message details
+   * @returns {Promise<Object>} - Notification result
+   */
+  async sendDirectMessageNotification(senderId, receiverId, senderName, messagePreview, directMessageData = {}) {
+    const template = NOTIFICATION_TEMPLATES.DIRECT_MESSAGE;
+    const title = template.title;
+    const body = template.body.replace('{senderName}', senderName);
+
+    // Direct message has special data to indicate it's a privileged message
+    const data = {
+      type: NOTIFICATION_TYPES.DIRECT_MESSAGE,
+      senderId,
+      senderName,
+      conversationId: directMessageData.conversationId || 
+        `direct_${[senderId, receiverId].sort().join('_')}`,
+      messageId: directMessageData.messageId,
+      isDirectMessage: true,  // Flag to indicate this is a special direct message
+      remainingDirectMessages: directMessageData.remainingCount, // How many direct messages user has left
+      timestamp: new Date().toISOString()
+    };
+
+    const result = await this.notificationService.sendToUsers(
+      title,
+      body,
+      [receiverId],
+      data,
+      { 
+        priority: NOTIFICATION_PRIORITIES.HIGH,
+        sound: 'special',  // Different sound for direct messages
+        badge: directMessageData.unreadCount || 1,
+        color: '#FFD700'  // Gold color to indicate special message
+      }
+    );
+
+    this.log(`Direct message notification sent to user ${receiverId} (special privilege)`);
+    
+    return result;
+  }
+
+  /**
    * Send notification for new message
    * @param {string} senderId - Message sender ID
    * @param {string} receiverId - Message receiver ID
