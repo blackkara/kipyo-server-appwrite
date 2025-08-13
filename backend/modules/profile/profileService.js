@@ -655,6 +655,32 @@ class ProfileService {
     }
   }
 
+  async useDirectMessageIfExists(jwtToken, userId, requestId, log, requestedTimezone = null) {
+    try {
+      const result = { usedDirectMessageCount: 0, remainingDirectMessageCount: 0 };
+      const profile = await this.getProfile(jwtToken, userId, requestId, log, requestedTimezone);
+      if (profile.resetStats.newMessageCount < 1) {
+        return result; // No direct messages available
+      } else {
+        result.usedDirectMessageCount = 1;
+        result.remainingDirectMessageCount = profile.resetStats.newMessageCount - 1;
+      }
+
+      const updateData = { dailyMessageRemaining: profile.resetStats.newMessageCount - 1 };
+      const appwriteService = AppwriteService.getInstance();
+      const updatedProfile = await appwriteService.updateDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILES_ID,
+        userId,
+        updateData
+      );
+
+      return result;
+    } catch (error) {
+      log(`[${requestId}] ERROR in useDirectMessageIfExists: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
-export default new ProfileService();
+export default new ProfileService();  

@@ -1,4 +1,5 @@
 import AppwriteService from '../../services/appwrite/AppwriteService.js';
+import profileService from '../profile/profileService.js';
 import crypto from 'crypto';
 
 const { createQuery } = AppwriteService;
@@ -110,7 +111,7 @@ class DialogService {
 
       const appwriteService = AppwriteService.getInstance();
 
-      const dialog = await appwriteService.createDocumentWithAdminPrivileges(
+      const dialog = await appwriteService.upsertDocumentWithAdminPrivileges(
         jwtToken,
         requestedUserId,
         process.env.DB_COLLECTION_DIALOGS_ID,
@@ -135,18 +136,18 @@ class DialogService {
       return dialog;
 
     } catch (error) {
-      // error.type : document_already_exists
-      // error.code : 409
-      // Handle duplicate creation gracefully
-      if (error.code === 409 || error.message.includes('already exists')) {
-        log(`[${requestId}] Dialog already exists, fetching existing one...`);
+      // // error.type : document_already_exists
+      // // error.code : 409
+      // // Handle duplicate creation gracefully
+      // if (error.code === 409 || error.message.includes('already exists')) {
+      //   log(`[${requestId}] Dialog already exists, fetching existing one...`);
 
-        const existingDialog = await this.checkIfDialogExists(jwtToken, occupants, requestId, log);
-        if (existingDialog) {
-          log(`[${requestId}] Retrieved existing dialog: ${existingDialog.$id}`);
-          return existingDialog;
-        }
-      }
+      //   const existingDialog = await this.checkIfDialogExists(jwtToken, occupants, requestId, log);
+      //   if (existingDialog) {
+      //     log(`[${requestId}] Retrieved existing dialog: ${existingDialog.$id}`);
+      //     return existingDialog;
+      //   }
+      // }
 
       log(`[${requestId}] ERROR in createDialog: ${error.message}`);
       throw new Error(`Failed to create dialog: ${error.message}`);
@@ -192,41 +193,55 @@ class DialogService {
   }
 
   async createDirectDialog(userId, occupantId, jwtToken, requestId, log) {
-    const deterministicPair = [userId, occupantId].sort();
-    log(`[${requestId}] Sorted pair: [${deterministicPair.join(', ')}]`);
-    const dialogs = await this.createDialog(jwtToken, deterministicPair,occupantId, requestId, log);
-    return;
+    try {
+      const deterministicPair = [userId, occupantId].sort();
+      log(`[${requestId}] Sorted pair: [${deterministicPair.join(', ')}]`);
 
-    log(`[${requestId}] Running parallel checks...`);
-    const [blockage, existingDialog] = await Promise.all([
-      this.hasAnyBlockage(jwtToken, userId, occupantId, requestId, log),
-      this.checkIfDialogExists(jwtToken, deterministicPair, requestId, log)
-    ]);
+      log(`[${requestId}] Running parallel checks...`);
+      const [blockage, existingDialog] = await Promise.all([
+        this.hasAnyBlockage(jwtToken, userId, occupantId, requestId, log),
+        this.checkIfDialogExists(jwtToken, deterministicPair, requestId, log)
+      ]);
 
-    const result = {
-      blockage: false,
-      isExisting: false,
-      dialog: null
-    };
+      const result = {
+        hasBlockage: false,
+        hasExistingDialog: false,
+        dialog: null
+      };
 
-    if (blockage.length > 0) {
-      log(`[${requestId}] Blockage found: ${blockage.map(b => b.$id).join(', ')}`);
-      result.blockage = true;
+      if (blockage.length > 0) {
+        log(`[${requestId}] Blockage found: ${blockage.map(b => b.$id).join(', ')}`);
+        result.hasBlockage = true;
+        return result;
+      }
+
+      if (existingDialog) {
+        log(`[${requestId}] Existing dialog found: ${existingDialog.$id}`);
+        result.dialog = existingDialog;
+        result.hasExistingDialog = true;
+        return result;
+      }
+
+      const usage = await profileService.useDirectMessageIfExists(
+        jwtToken,
+        userId,
+        requestId,
+        log
+      );
+
+      if (usage.usedDirectMessageCount === 0) {
+        log(`[${requestId}] No direct messages available`);
+        return result;
+      }
+
+      const dialog = await this.createDialog(jwtToken, deterministicPair, occupantId, requestId, log);
+      result.dialog = dialog;
+
       return result;
+    } catch (error) {
+      log(`[${requestId}] ERROR in createDirectDialog: ${error.message}`);
+      throw new Error(`Failed to create direct dialog: ${error.message}`);
     }
-
-    if (existingDialog) {
-      log(`[${requestId}] Existing dialog found: ${existingDialog.$id}`);
-      result.dialog = existingDialog;
-      result.isExisting = true;
-      return result;
-    }
-
-    const dialog = await this.createDialog(jwtToken, deterministicPair,occupantId, requestId, log);
-    result.dialog = dialog;
-  
-    return result;
   }
 }
-
 export default new DialogService();

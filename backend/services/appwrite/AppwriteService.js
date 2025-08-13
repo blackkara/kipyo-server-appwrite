@@ -258,8 +258,16 @@ class AppwriteService {
     return this.documentOps.getDocument(jwtToken, collectionId, documentId);
   }
 
+  async createDocument(jwtToken, collectionId, documentId, data, permissions = []) {
+    return this.documentOps.createDocument(jwtToken, collectionId, documentId, data, permissions);
+  }
+
   async updateDocument(jwtToken, collectionId, documentId, data) {
     return this.documentOps.updateDocument(jwtToken, collectionId, documentId, data);
+  }
+
+  async upsertDocument(jwtToken, collectionId, documentId, data, permissions = null) {
+    return this.documentOps.upsertDocument(jwtToken, collectionId, documentId, data, permissions);
   }
 
   async deleteDocument(jwtToken, collectionId, documentId) {
@@ -268,6 +276,10 @@ class AppwriteService {
 
   async deleteUserDocuments(jwtToken, collectionId, additionalQueries = []) {
     return this.documentOps.deleteUserDocuments(jwtToken, collectionId, additionalQueries);
+  }
+
+  async bulkUpsertDocuments(jwtToken, collectionId, documents) {
+    return this.documentOps.bulkUpsertDocuments(jwtToken, collectionId, documents);
   }
 
   // ======================
@@ -286,8 +298,18 @@ class AppwriteService {
     );
   }
 
+  async upsertDocumentWithAdminPrivileges(jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers = []) {
+    return this.adminOps.upsertDocumentWithAdminPrivileges(
+      jwtToken, requestingUserId, collectionId, documentId, data, additionalUsers
+    );
+  }
+
   async deleteDocumentWithAdminPrivileges(jwtToken, collectionId, documentId) {
     return this.adminOps.deleteDocumentWithAdminPrivileges(jwtToken, collectionId, documentId);
+  }
+
+  async bulkUpsertDocumentsWithAdminPrivileges(jwtToken, collectionId, documents) {
+    return this.adminOps.bulkUpsertDocumentsWithAdminPrivileges(jwtToken, collectionId, documents);
   }
 
   buildPermissions(ownerId, additionalUsers = []) {

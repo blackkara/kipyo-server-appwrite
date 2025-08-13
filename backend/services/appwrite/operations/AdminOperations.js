@@ -18,6 +18,74 @@ export class AdminOperations {
   }
 
   /**
+   * Upsert document with admin privileges
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
+   * @param {string} requestingUserId - User ID to set permissions for
+   * @param {string} collectionId - Collection ID
+   * @param {string} documentId - Document ID
+   * @param {Object} data - Document data
+   * @param {Array} additionalUsers - Additional users with permissions
+   * @returns {Promise<Object>} - Upserted document
+   */
+  async upsertDocumentWithAdminPrivileges(
+    jwtToken,
+    requestingUserId,
+    collectionId,
+    documentId,
+    data,
+    additionalUsers = []
+  ) {
+    const context = {
+      methodName: 'upsertDocumentWithAdminPrivileges',
+      collectionId,
+      documentId,
+      userId: requestingUserId,
+      additionalData: {
+        hasData: !!data,
+        additionalUsersCount: additionalUsers.length,
+        dataKeys: Object.keys(data || {})
+      }
+    };
+
+    return this.executeAdminOperation(async () => {
+      // Note: We receive JWT for user context, but use API key internally for admin operations
+      const permissions = this.buildPermissions(requestingUserId, additionalUsers);
+      
+      this.log(`[ADMIN ACTION] Upserting document ${documentId} in ${collectionId} for user ${requestingUserId}`);
+
+      // This uses API key internally (configured in environment)
+      const databases = this.clientManager.getAdminDatabases();
+      const databaseId = this.getDatabaseId();
+      
+      const result = await databases.upsertDocument(
+        databaseId,
+        collectionId,
+        documentId,
+        data,
+        permissions
+      );
+
+      // Determine if it was create or update
+      const isUpdate = result.$updatedAt !== result.$createdAt;
+      const eventName = isUpdate ? 
+        TRACKING_EVENTS.ADMIN_DOCUMENT_UPDATED : 
+        TRACKING_EVENTS.ADMIN_DOCUMENT_CREATED;
+
+      await this.trackAdminEvent(eventName, {
+        collection_id: collectionId,
+        document_id: documentId,
+        requesting_user_id: requestingUserId,
+        operation: 'upsert',
+        was_update: isUpdate,
+        additional_users_count: additionalUsers.length,
+        data_fields_count: Object.keys(data || {}).length
+      }, requestingUserId);
+
+      return result;
+    }, context);
+  }
+
+  /**
    * Create document with admin privileges
    * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} requestingUserId - User ID to set permissions for
@@ -202,6 +270,90 @@ export class AdminOperations {
       );
 
       return result;
+    }, context);
+  }
+
+  /**
+   * Bulk upsert documents with admin privileges
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
+   * @param {string} collectionId - Collection ID
+   * @param {Array} documents - Array of {documentId, data, userId, additionalUsers} objects
+   * @returns {Promise<Object>} - Bulk upsert result
+   */
+  async bulkUpsertDocumentsWithAdminPrivileges(jwtToken, collectionId, documents) {
+    const context = {
+      methodName: 'bulkUpsertDocumentsWithAdminPrivileges',
+      collectionId,
+      additionalData: { documentsCount: documents.length }
+    };
+
+    return this.executeAdminOperation(async () => {
+      // Note: We receive JWT for user context, but use API key internally for admin operations
+      this.log(`[ADMIN ACTION] Bulk upserting ${documents.length} documents in ${collectionId}`);
+
+      // This uses API key internally (configured in environment)
+      const databases = this.clientManager.getAdminDatabases();
+      const databaseId = this.getDatabaseId();
+      
+      const results = {
+        successful: [],
+        failed: [],
+        created: 0,
+        updated: 0,
+        totalProcessed: 0
+      };
+
+      for (const doc of documents) {
+        try {
+          // Build permissions for each document
+          const permissions = this.buildPermissions(
+            doc.userId || doc.requestingUserId, 
+            doc.additionalUsers || []
+          );
+          
+          const result = await databases.upsertDocument(
+            databaseId,
+            collectionId,
+            doc.documentId,
+            doc.data,
+            permissions
+          );
+          
+          // Check if it was create or update
+          const isUpdate = result.$updatedAt !== result.$createdAt;
+          if (isUpdate) {
+            results.updated++;
+          } else {
+            results.created++;
+          }
+          
+          results.successful.push({
+            documentId: doc.documentId,
+            result,
+            operation: isUpdate ? 'updated' : 'created'
+          });
+        } catch (error) {
+          results.failed.push({
+            documentId: doc.documentId,
+            error: error.message
+          });
+        }
+        results.totalProcessed++;
+      }
+
+      results.successRate = (results.successful.length / results.totalProcessed) * 100;
+
+      await this.trackAdminEvent('admin_bulk_upsert', {
+        collection_id: collectionId,
+        total_documents: documents.length,
+        successful_upserts: results.successful.length,
+        documents_created: results.created,
+        documents_updated: results.updated,
+        failed_upserts: results.failed.length,
+        success_rate: results.successRate
+      }, 'admin');
+
+      return results;
     }, context);
   }
 

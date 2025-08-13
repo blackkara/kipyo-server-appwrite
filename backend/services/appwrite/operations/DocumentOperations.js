@@ -88,6 +88,59 @@ export class DocumentOperations {
   }
 
   /**
+   * Upsert document (create or update)
+   * @param {string} jwtToken - JWT token
+   * @param {string} collectionId - Collection ID
+   * @param {string} documentId - Document ID
+   * @param {Object} data - Document data
+   * @param {Array} permissions - Document permissions (optional)
+   * @returns {Promise<Object>} - Upserted document
+   */
+  async upsertDocument(jwtToken, collectionId, documentId, data, permissions = null) {
+    const context = {
+      methodName: 'upsertDocument',
+      collectionId,
+      documentId,
+      additionalData: { 
+        hasData: !!data,
+        dataKeys: Object.keys(data || {}),
+        hasPermissions: !!permissions
+      }
+    };
+
+    return this.executeOperation(async () => {
+      const userInfo = await this.validateUser(jwtToken);
+      const databases = await this.clientManager.getDatabases(jwtToken);
+      const databaseId = this.getDatabaseId();
+      
+      // Build parameters - include permissions only if provided
+      const params = [databaseId, collectionId, documentId, data];
+      if (permissions !== null) {
+        params.push(permissions);
+      }
+      
+      const result = await databases.upsertDocument(...params);
+
+      // Track business event - determine if it was create or update
+      const isUpdate = result.$updatedAt !== result.$createdAt;
+      const eventName = isUpdate ? 
+        TRACKING_EVENTS.DOCUMENT_UPDATED : 
+        TRACKING_EVENTS.DOCUMENT_CREATED;
+      
+      await this.trackBusinessEvent(eventName, {
+        collection_id: collectionId,
+        document_id: documentId,
+        operation: 'upsert',
+        was_update: isUpdate,
+        fields_count: Object.keys(data || {}).length,
+        permissions_count: permissions ? permissions.length : 0
+      }, userInfo.userId);
+
+      return result;
+    }, context, jwtToken);
+  }
+
+  /**
    * Create document
    * @param {string} jwtToken - JWT token
    * @param {string} collectionId - Collection ID
@@ -317,6 +370,81 @@ export class DocumentOperations {
       );
 
       return result;
+    }, context, jwtToken);
+  }
+
+  /**
+   * Bulk upsert documents
+   * @param {string} jwtToken - JWT token
+   * @param {string} collectionId - Collection ID
+   * @param {Array} documents - Array of {documentId, data, permissions} objects
+   * @returns {Promise<Object>} - Bulk upsert result
+   */
+  async bulkUpsertDocuments(jwtToken, collectionId, documents) {
+    const context = {
+      methodName: 'bulkUpsertDocuments',
+      collectionId,
+      additionalData: { documentsCount: documents.length }
+    };
+
+    return this.executeOperation(async () => {
+      const userInfo = await this.validateUser(jwtToken);
+      const databases = await this.clientManager.getDatabases(jwtToken);
+      const databaseId = this.getDatabaseId();
+      
+      const results = {
+        successful: [],
+        failed: [],
+        created: 0,
+        updated: 0,
+        totalProcessed: 0
+      };
+
+      for (const doc of documents) {
+        try {
+          // Build parameters for each document
+          const params = [databaseId, collectionId, doc.documentId, doc.data];
+          if (doc.permissions) {
+            params.push(doc.permissions);
+          }
+          
+          const result = await databases.upsertDocument(...params);
+          
+          // Check if it was create or update
+          const isUpdate = result.$updatedAt !== result.$createdAt;
+          if (isUpdate) {
+            results.updated++;
+          } else {
+            results.created++;
+          }
+          
+          results.successful.push({
+            documentId: doc.documentId,
+            result,
+            operation: isUpdate ? 'updated' : 'created'
+          });
+        } catch (error) {
+          results.failed.push({
+            documentId: doc.documentId,
+            error: error.message
+          });
+        }
+        results.totalProcessed++;
+      }
+
+      results.successRate = (results.successful.length / results.totalProcessed) * 100;
+
+      await this.trackBusinessEvent('bulk_upsert', {
+        collection_id: collectionId,
+        total_documents: documents.length,
+        successful_upserts: results.successful.length,
+        documents_created: results.created,
+        documents_updated: results.updated,
+        failed_upserts: results.failed.length,
+        success_rate: results.successRate
+      }, userInfo.userId);
+
+      return results;
     }, context, jwtToken);
   }
 
