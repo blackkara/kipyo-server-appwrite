@@ -30,6 +30,9 @@ import { HealthChecker } from './monitoring/HealthChecker.js';
 import { NotificationService } from './messaging/NotificationService.js';
 import { NotificationTemplates } from './messaging/NotificationTemplates.js';
 
+// Translation modules
+import { TranslateService } from './translate/TranslateService.js';
+
 // Utils
 import { RetryManager } from './utils/RetryManager.js';
 import NetworkUtils from './utils/NetworkUtils.js';
@@ -149,6 +152,17 @@ class AppwriteService {
     });
     
     this.notificationTemplates = new NotificationTemplates(this.notificationService);
+    
+    // Translation module
+    this.translateService = new TranslateService({
+      logger: this.log,
+      documentOperations: this.documentOps,
+      performanceMonitor: this.performanceMonitor,
+      errorAnalyzer: this.errorAnalyzer,
+      postHogService: this.postHog,
+      configManager: this.configManager,
+      retryManager: this.retryManager
+    });
   }
 
   // ======================
@@ -456,6 +470,38 @@ class AppwriteService {
 
   getNotificationStatistics() {
     return this.notificationService.getStatistics();
+  }
+
+  // ======================
+  // Translation Operations (Backward Compatibility)
+  // ======================
+  
+  async translateMessage(jwtToken, messageId, targetLanguage, options = {}) {
+    return this.translateService.translateMessage(jwtToken, messageId, targetLanguage, options);
+  }
+
+  async translateBatch(jwtToken, messageIds, targetLanguage) {
+    return this.translateService.translateBatch(jwtToken, messageIds, targetLanguage);
+  }
+
+  async translateConversation(jwtToken, conversationId, targetLanguage) {
+    return this.translateService.translateConversation(jwtToken, conversationId, targetLanguage);
+  }
+
+  async detectLanguage(text) {
+    return this.translateService.detectLanguage(text);
+  }
+
+  async getSupportedLanguages(displayLanguage = 'en') {
+    return this.translateService.getSupportedLanguages(displayLanguage);
+  }
+
+  getTranslationStatistics() {
+    return this.translateService.getStatistics();
+  }
+
+  clearTranslationCache() {
+    return this.translateService.clearCache();
   }
 
   // ======================

@@ -24,6 +24,12 @@ export class ConfigManager {
         apiKey: process.env.APPWRITE_DEV_KEY
       },
 
+      // Google Cloud Configuration
+      google: {
+        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        apiKey: process.env.GOOGLE_TRANSLATE_API_KEY
+      },
+
       // Feature Flags
       features: {
         jwtDebugMode: process.env.JWT_DEBUG_MODE === 'true',

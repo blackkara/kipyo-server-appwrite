@@ -1,5 +1,5 @@
 
-import AppwriteService from '../../services/appwrite/AppwriteService.js';
+import AppwriteService from '../services/appwrite/AppwriteService.js';
 
 const authenticateUser = async (req, res, next) => {
   const {startTime, requestId} = req;

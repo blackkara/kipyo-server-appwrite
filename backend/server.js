@@ -7,9 +7,12 @@ import interactionRoutes from './modules/interaction/interactionRoutes.js';
 import matchRoutes from './modules/match/matchRoutes.js';
 import exploreRoutes from './modules/explore/exploreRoutes.js';
 import profileRoutes from './modules/profile/profileRoutes.js';
+
+import translateRouter from './api/translate/TranslateEndpoint.js';
+
 import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js'
 
-import authenticateUser from './utils/middleware/authAppwrite.js';
+import authenticateUser from './middleware/authenticateUser.js';
 
 import AppwriteService from './services/appwrite/AppwriteService.js';
 const appwriteService = AppwriteService.getInstance();
