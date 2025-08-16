@@ -551,19 +551,19 @@ class ProfileService {
         }
       }
 
-      log(`[${requestId}] GetProfile pre validation - Remaining direct messages: ${profile.dailyMessageRemaining}`);
+      log(`[${requestId}] GetProfile pre validation - Remaining direct messages: ${profile.dailyDirectMessageRemaining}`);
       const resetStats = ProfileUtils.validateDailyReset(
         currentTimezoneOffset,
-        updatedProfile.dailyMessageResetDate,
-        updatedProfile.dailyMessageRemaining,
+        updatedProfile.dailyDirectMessageRemainingResetDate,
+        updatedProfile.dailyDirectMessageRemaining,
         requestId,
         log
       );
       log(`[${requestId}] GetProfile after validation - Remaining direct messages: ${resetStats.newMessageCount}`);
 
       if (resetStats.shouldReset) {
-        updateData.dailyMessageRemaining = resetStats.newMessageCount;
-        updateData.dailyMessageResetDate = new Date().toISOString();
+        updateData.dailyDirectMessageRemaining = resetStats.newMessageCount;
+        updateData.dailyDirectMessageRemainingResetDate = new Date().toISOString();
         log(`[${requestId}] Daily reset should be performed - resetting message count to ${resetStats.newMessageCount}`);
       }
 
@@ -591,6 +591,11 @@ class ProfileService {
       const operationDuration = Date.now() - operationStart;
       log(`[${requestId}] Profile retrieved successfully in ${operationDuration}ms`);
 
+
+      // await appwriteService.quotaManager.resetUserQuotas(jwtToken, userId);
+      const quotas = await appwriteService.quotaManager.getAllQuotaStatuses(jwtToken, userId);
+      Object.assign(updatedProfile, { quotaStatus: quotas });
+
       return updatedProfile;
 
     } catch (error) {
@@ -604,60 +609,6 @@ class ProfileService {
     }
   }
 
-  // Diğer metodlar aynı kalıyor...
-  transformProfileForResponse(profile, requestId, log) {
-    try {
-      log(`[${requestId}] Transforming profile data for response`);
-
-      // Generate photo URLs if photos exist
-      const photos = profile.photos || [];
-      const photosWithUrl = photos.length > 0 ? generatePhotoUrls(photos) : [];
-
-      // ProfileDto'ya uygun response structure
-      const transformedProfile = {
-        // ProfileDto'daki temel alanlar
-        userId: profile.userId || profile.$id,
-        username: profile.username || profile.name || '',
-        email: profile.email || '',
-        birthDate: profile.birthDate || null,
-        createDate: profile.createDate || profile.$createdAt || null,
-        gender: profile.gender || 'woman', // Default 'woman' (Gender enum'dan)
-
-        // Optional fields
-        about: profile.about || null,
-
-        // Photos - ProfileDto'daki gibi
-        photos: photos, // S3 keys array
-        photosWithUrl: photosWithUrl, // Full URLs array
-
-        // Blocks - ProfileDto'daki blocks field'i için
-        blocks: profile.blocks || [],
-
-        // Profile content arrays
-        passions: profile.passions || null, // List<String>? - nullable
-        habits: profile.habits || null, // List? - nullable, mixed types allowed
-
-        // Relationship info
-        relationStatus: profile.relationStatus || null, // String? - nullable
-        relationGoal: profile.relationGoal || null, // String? - nullable
-        height: profile.height || null, // double? - nullable
-
-        // Profile completion (ekstra bilgi)
-        profileCompletionPercentage: this.calculateProfileCompletion(profile),
-
-        // Timestamps (metadata)
-        $createdAt: profile.$createdAt,
-        $updatedAt: profile.$updatedAt
-      };
-
-      log(`[${requestId}] Profile transformation completed`);
-      return transformedProfile;
-
-    } catch (error) {
-      log(`[${requestId}] ERROR in transformProfileForResponse: ${error.message}`);
-      throw new AppError(ERROR_CODES.PROCESSING_ERROR, 'Failed to transform profile data', error);
-    }
-  }
 
   async useDirectMessageIfExists(jwtToken, userId, requestId, log, requestedTimezone = null) {
     try {
@@ -673,7 +624,7 @@ class ProfileService {
       }
 
 
-      const updateData = { dailyMessageRemaining: result.profile.resetStats.newMessageCount - 1 };
+      const updateData = { dailyDirectMessageRemaining: result.profile.resetStats.newMessageCount - 1 };
       const appwriteService = AppwriteService.getInstance();
       const updatedProfile = await appwriteService.updateDocument(
         jwtToken,

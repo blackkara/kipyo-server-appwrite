@@ -18,7 +18,8 @@ export const SUPPORTED_LANGUAGES = {
   'ko': { name: 'Korean', nativeName: '한국어', active: true },
   'hi': { name: 'Hindi', nativeName: 'हिन्दी', active: true },
   'nl': { name: 'Dutch', nativeName: 'Nederlands', active: true },
-  'sv': { name: 'Swedish', nativeName: 'Svenska', active: true }
+  'sv': { name: 'Swedish', nativeName: 'Svenska', active: true },
+  'th': { name: 'Thai', nativeName: 'ไทย', active: true }
 };
 
 /**

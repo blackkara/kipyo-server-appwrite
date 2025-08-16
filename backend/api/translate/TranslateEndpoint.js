@@ -1,5 +1,3 @@
-// src/api/translate/TranslateEndpoint.js
-
 import express from 'express';
 import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import authenticateUser from '../../middleware/authenticateUser.js';
@@ -32,6 +30,7 @@ router.post('/message', authenticateUser, async (req, res) => {
     // Translate message
     const result = await appwriteService.translateMessage(
       jwtToken,
+      requestedUser.$id,
       messageId,
       targetLanguage.toLowerCase(),
       { forceRefresh }

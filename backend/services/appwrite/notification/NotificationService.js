@@ -15,11 +15,11 @@ export class NotificationService {
     this.errorAnalyzer = dependencies.errorAnalyzer;
     this.postHog = dependencies.postHogService;
     this.config = dependencies.configManager;
-    
+
     // Initialize messaging client
     this.messaging = null;
     this.initializeMessaging();
-    
+
     // Statistics
     this.stats = {
       sent: 0,
@@ -50,15 +50,15 @@ export class NotificationService {
    */
   createStandaloneClient() {
     const { Client } = require('node-appwrite');
-    
+
     const endpoint = this.config?.get('appwrite.endpoint') || process.env.APPWRITE_END_POINT;
     const projectId = this.config?.get('appwrite.projectId') || process.env.APPWRITE_PROJECT_ID;
     const apiKey = this.config?.get('appwrite.apiKey') || process.env.APPWRITE_DEV_KEY;
-    
+
     if (!endpoint || !projectId || !apiKey) {
       throw new Error('Appwrite configuration missing for messaging service');
     }
-    
+
     return new Client()
       .setEndpoint(endpoint)
       .setProject(projectId)
@@ -84,23 +84,33 @@ export class NotificationService {
     return this.executeNotificationOperation(async () => {
       // Validate inputs
       this.validateNotificationInputs(title, body, userIds);
-      
+
       // Prepare notification parameters
       const messageId = options.messageId || 'unique()';
       const notificationParams = this.buildNotificationParams(
         messageId,
         title,
         body,
-        [],        // topics
-        userIds,   // users
-        [],        // targets
+        [],          // topics
+        userIds,    // users
+        [],          // targets
         data,
         options
       );
-      
+
       // Send notification
-      const notification = await this.messaging.createPush(...notificationParams);
-      
+      //const notification = await this.messaging.createPush(...notificationParams);
+      const notification = await this.messaging.createPush(
+        messageId,
+        title,
+        body,
+        [],          // topics
+        userIds,    // users
+        [],          // targets
+        data         // data payload
+
+      );
+
       // Track success
       await this.trackNotificationSuccess(
         NOTIFICATION_EVENTS.NOTIFICATION_SENT,
@@ -112,17 +122,17 @@ export class NotificationService {
         },
         userIds[0] // Track with first user
       );
-      
+
       // Update statistics
       this.updateStatistics('sent', data.type);
-      
+
       return {
         success: true,
         messageId: notification.$id,
         notification,
         targetUsers: userIds.length
       };
-      
+
     }, context);
   }
 
@@ -147,7 +157,7 @@ export class NotificationService {
       if (!topics || topics.length === 0) {
         throw new Error('At least one topic is required');
       }
-      
+
       // Prepare notification parameters
       const messageId = options.messageId || 'unique()';
       const notificationParams = this.buildNotificationParams(
@@ -160,10 +170,10 @@ export class NotificationService {
         data,
         options
       );
-      
+
       // Send notification
       const notification = await this.messaging.createPush(...notificationParams);
-      
+
       // Track success
       await this.trackNotificationSuccess(
         NOTIFICATION_EVENTS.BROADCAST_SENT,
@@ -174,17 +184,17 @@ export class NotificationService {
           has_data: Object.keys(data).length > 0
         }
       );
-      
+
       // Update statistics
       this.updateStatistics('sent', 'broadcast');
-      
+
       return {
         success: true,
         messageId: notification.$id,
         notification,
         targetTopics: topics
       };
-      
+
     }, context);
   }
 
@@ -215,13 +225,13 @@ export class NotificationService {
             notif.data || {},
             notif.options || {}
           );
-          
+
           results.successful.push({
             index: results.totalProcessed,
             messageId: result.messageId,
             userIds: notif.userIds
           });
-          
+
         } catch (error) {
           results.failed.push({
             index: results.totalProcessed,
@@ -230,7 +240,7 @@ export class NotificationService {
           });
           this.updateStatistics('failed', notif.data?.type);
         }
-        
+
         results.totalProcessed++;
       }
 
@@ -308,15 +318,15 @@ export class NotificationService {
     if (!title || !body) {
       throw new Error('Title and body are required');
     }
-    
+
     if (!userIds || userIds.length === 0) {
       throw new Error('At least one user ID is required');
     }
-    
+
     if (title.length > 100) {
       throw new Error('Title must be 100 characters or less');
     }
-    
+
     if (body.length > 500) {
       throw new Error('Body must be 500 characters or less');
     }
@@ -336,18 +346,18 @@ export class NotificationService {
           context
         );
       }
-      
+
       return await operation();
-      
+
     } catch (error) {
       // Error analysis
       if (this.errorAnalyzer) {
         await this.errorAnalyzer.trackError(error, context);
       }
-      
+
       // Update failure statistics
       this.updateStatistics('failed', context.notificationType);
-      
+
       this.log(`Notification operation failed: ${error.message}`, context);
       throw error;
     }
@@ -363,7 +373,7 @@ export class NotificationService {
     } else if (type === 'failed') {
       this.stats.failed++;
     }
-    
+
     if (notificationType) {
       if (!this.stats.byType[notificationType]) {
         this.stats.byType[notificationType] = { sent: 0, failed: 0 };
@@ -378,7 +388,7 @@ export class NotificationService {
    */
   async trackNotificationSuccess(eventName, data, userId = 'system') {
     if (!this.postHog) return;
-    
+
     try {
       await this.postHog.trackBusinessEvent(eventName, data, userId);
     } catch (error) {
@@ -393,7 +403,7 @@ export class NotificationService {
   getStatistics() {
     return {
       ...this.stats,
-      successRate: this.stats.sent > 0 ? 
+      successRate: this.stats.sent > 0 ?
         (this.stats.sent / (this.stats.sent + this.stats.failed)) * 100 : 0
     };
   }

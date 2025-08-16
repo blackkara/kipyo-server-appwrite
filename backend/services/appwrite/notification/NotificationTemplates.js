@@ -129,7 +129,8 @@ export class NotificationTemplates {
         priority: NOTIFICATION_PRIORITIES.HIGH,
         sound: 'special',  // Different sound for direct messages
         badge: directMessageData.unreadCount || 1,
-        color: '#FFD700'  // Gold color to indicate special message
+        color: '#FFD700',  // Gold color to indicate special message,
+        action :''
       }
     );
 

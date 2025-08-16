@@ -1,6 +1,7 @@
-// src/services/appwrite/translate/TranslateService.js
-
-import { TRANSLATION_EVENTS, SUPPORTED_LANGUAGES, TRANSLATION_LIMITS } from './TranslateConstants.js';
+import { v2 as Translate } from '@google-cloud/translate';
+import { TRANSLATION_EVENTS, SUPPORTED_LANGUAGES } from './TranslateConstants.js';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Translation Service using Google Cloud Translate
@@ -9,20 +10,21 @@ export class TranslateService {
   constructor(dependencies = {}) {
     this.log = dependencies.logger || console.log;
     this.documentOps = dependencies.documentOperations;
+    this.clientManager = dependencies.clientManager;
     this.performanceMonitor = dependencies.performanceMonitor;
     this.errorAnalyzer = dependencies.errorAnalyzer;
     this.postHog = dependencies.postHogService;
     this.config = dependencies.configManager;
-    this.retryManager = dependencies.retryManager;
-    
+    this.quotaManager = dependencies.quotaManager;
+
     // Initialize Google Translate client
     this.translator = null;
     this.initializeTranslator();
-    
+
     // Translation cache for optimization
     this.translationCache = new Map();
     this.maxCacheSize = 1000;
-    
+
     // Statistics
     this.stats = {
       totalTranslations: 0,
@@ -38,27 +40,55 @@ export class TranslateService {
    */
   initializeTranslator() {
     try {
-      const { Translate } = require('@google-cloud/translate').v2;
-      
-      // Get Google Cloud credentials from config or environment
+      // First try to use keyfile if available
+      const keyfilePath = this.config?.get('google.keyFilename') || process.env.GOOGLE_CLOUD_KEY_FILE;
+
+      if (keyfilePath) {
+        // Use service account keyfile
+        const absolutePath = path.isAbsolute(keyfilePath)
+          ? keyfilePath
+          : path.join(process.cwd(), keyfilePath);
+
+        if (fs.existsSync(absolutePath)) {
+          // Read and parse keyfile
+          const keyfileContent = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
+
+          // v2 API için doğru constructor
+          this.translator = new Translate.Translate({
+            projectId: keyfileContent.project_id,
+            keyFilename: absolutePath
+          });
+
+          this.log('Google Translate initialized with service account keyfile');
+          return;
+        } else {
+          this.log(`Keyfile not found at ${absolutePath}, falling back to API key`);
+        }
+      }
+
+      // Fallback to API key method
       const projectId = this.config?.get('google.projectId') || process.env.GOOGLE_CLOUD_PROJECT_ID;
       const apiKey = this.config?.get('google.apiKey') || process.env.GOOGLE_TRANSLATE_API_KEY;
-      
+
       if (!apiKey) {
-        throw new Error('Google Translate API key not configured');
+        throw new Error('Google Translate API key or keyfile not configured');
       }
-      
-      this.translator = new Translate({
+
+      // v2 API için doğru constructor
+      this.translator = new Translate.Translate({
         projectId,
         key: apiKey
       });
-      
-      this.log('Google Translate service initialized');
+
+      this.log('Google Translate initialized with API key');
     } catch (error) {
       this.log('Failed to initialize Google Translate:', error.message);
+      console.error('Full error:', error);
       throw error;
     }
   }
+
+  // Rest of the methods remain the same...
 
   /**
    * Translate a message
@@ -68,7 +98,7 @@ export class TranslateService {
    * @param {Object} options - Translation options
    * @returns {Promise<Object>} - Translation result
    */
-  async translateMessage(jwtToken, messageId, targetLanguage, options = {}) {
+  async translateMessage(jwtToken, requestedUserId, messageId, targetLanguage, options = {}) {
     const context = {
       methodName: 'translateMessage',
       messageId,
@@ -77,15 +107,10 @@ export class TranslateService {
     };
 
     return this.executeTranslation(async () => {
-      // Validate target language
-      if (!this.isLanguageSupported(targetLanguage)) {
-        throw new Error(`Language ${targetLanguage} is not supported`);
-      }
-
-      // Get the original message from database
+      // Get the original message from database first
       const message = await this.documentOps.getDocument(
         jwtToken,
-        'messages',
+        process.env.DB_COLLECTION_MESSAGES_ID,
         messageId
       );
 
@@ -93,26 +118,59 @@ export class TranslateService {
         throw new Error('Message not found');
       }
 
+      // Check and consume translation quota
+      if (this.quotaManager) {
+        const quotaResult = await this.quotaManager.checkAndConsumeQuota(
+          jwtToken,
+          requestedUserId,
+          'TRANSLATE',
+          1
+        );
+
+        if (!quotaResult.success) {
+          return {
+            success: false,
+            error: 'QUOTA_EXCEEDED',
+            message: quotaResult.message,
+            quotaInfo: {
+              remaining: quotaResult.remaining,
+              dailyLimit: quotaResult.dailyLimit,
+              nextResetAt: quotaResult.nextResetAt,
+              nextResetIn: quotaResult.nextResetIn
+            }
+          };
+        }
+      }
+
+      // Validate target language
+      if (!this.isLanguageSupported(targetLanguage)) {
+        throw new Error(`Language ${targetLanguage} is not supported`);
+      }
+
       // Check if already translated to this language
       if (message.translatedBody && message.translatedLanguage === targetLanguage) {
         this.log(`Message ${messageId} already translated to ${targetLanguage}`);
+
+        const quotaStatus = await this.getQuotaStatus(jwtToken, requestedUserId);
+
         return {
           success: true,
           messageId,
-          originalText: message.body,
+          originalText: message.message,
           translatedText: message.translatedBody,
           targetLanguage: message.translatedLanguage,
-          cached: true
+          cached: true,
+          quotaInfo: quotaStatus
         };
       }
 
       // Check cache first
-      const cacheKey = this.getCacheKey(message.body, targetLanguage);
+      const cacheKey = this.getCacheKey(message.message, targetLanguage);
       const cachedTranslation = this.translationCache.get(cacheKey);
-      
+
       if (cachedTranslation && !options.forceRefresh) {
         this.stats.cachedResponses++;
-        
+
         // Update message with cached translation
         await this.updateMessageTranslation(
           jwtToken,
@@ -120,26 +178,29 @@ export class TranslateService {
           cachedTranslation.translatedText,
           targetLanguage
         );
-        
+
+        const quotaStatus = await this.getQuotaStatus(jwtToken, requestedUserId);
+
         return {
           success: true,
           messageId,
-          originalText: message.body,
+          originalText: message.message,
           translatedText: cachedTranslation.translatedText,
           targetLanguage,
-          cached: true
+          cached: true,
+          quotaInfo: quotaStatus
         };
       }
 
       // Perform translation
       const translatedText = await this.performTranslation(
-        message.body,
+        message.message,
         targetLanguage,
         options.sourceLanguage
       );
 
       // Cache the translation
-      this.cacheTranslation(message.body, targetLanguage, translatedText);
+      this.cacheTranslation(message.message, targetLanguage, translatedText);
 
       // Update message in database
       await this.updateMessageTranslation(
@@ -155,22 +216,25 @@ export class TranslateService {
         {
           message_id: messageId,
           target_language: targetLanguage,
-          original_length: message.body.length,
+          original_length: message.message.length,
           translated_length: translatedText.length
         },
-        message.userId
+        requestedUserId
       );
 
       // Update statistics
       this.updateStatistics(targetLanguage);
 
+      const quotaStatus = await this.getQuotaStatus(jwtToken, requestedUserId);
+
       return {
         success: true,
         messageId,
-        originalText: message.body,
+        originalText: message.message,
         translatedText,
         targetLanguage,
-        cached: false
+        cached: false,
+        quotaInfo: quotaStatus
       };
 
     }, context, jwtToken);
@@ -204,7 +268,7 @@ export class TranslateService {
             messageId,
             targetLanguage
           );
-          
+
           results.successful.push({
             messageId,
             translatedText: result.translatedText
@@ -215,7 +279,7 @@ export class TranslateService {
             error: error.message
           });
         }
-        
+
         results.totalProcessed++;
       }
 
@@ -298,7 +362,7 @@ export class TranslateService {
     try {
       const [detections] = await this.translator.detect(text);
       const detection = Array.isArray(detections) ? detections[0] : detections;
-      
+
       return {
         language: detection.language,
         confidence: detection.confidence,
@@ -341,6 +405,11 @@ export class TranslateService {
    */
   async performTranslation(text, targetLanguage, sourceLanguage = null) {
     try {
+      // Translator'ın düzgün initialize edildiğini kontrol et
+      if (!this.translator) {
+        throw new Error('Translator not initialized');
+      }
+
       const options = {
         to: targetLanguage,
         ...(sourceLanguage && { from: sourceLanguage })
@@ -355,18 +424,22 @@ export class TranslateService {
   }
 
   /**
-   * Update message with translation in database
+   * Update message with translation in database using admin privileges
    * @private
    */
   async updateMessageTranslation(jwtToken, messageId, translatedText, targetLanguage) {
-    return this.documentOps.updateDocument(
-      jwtToken,
-      'messages',
+    // Use admin operations to update the message regardless of who created it
+    // This allows us to update messages created by any user
+    const databases = this.clientManager.getAdminDatabases();
+    const databaseId = process.env.APPWRITE_DB_ID;
+    
+    return databases.updateDocument(
+      databaseId,
+      process.env.DB_COLLECTION_MESSAGES_ID,
       messageId,
       {
         translatedBody: translatedText,
-        translatedLanguage: targetLanguage,
-        translatedAt: new Date().toISOString()
+        translatedLanguage: targetLanguage
       }
     );
   }
@@ -377,13 +450,13 @@ export class TranslateService {
    */
   cacheTranslation(originalText, targetLanguage, translatedText) {
     const cacheKey = this.getCacheKey(originalText, targetLanguage);
-    
+
     // Limit cache size
     if (this.translationCache.size >= this.maxCacheSize) {
       const firstKey = this.translationCache.keys().next().value;
       this.translationCache.delete(firstKey);
     }
-    
+
     this.translationCache.set(cacheKey, {
       translatedText,
       timestamp: Date.now()
@@ -444,9 +517,36 @@ export class TranslateService {
    * @private
    */
   async checkTranslationLimits(jwtToken) {
-    // This could check user's translation quota, subscription level, etc.
-    // For now, just a placeholder
+    // Quota checking is now handled by QuotaManager
     return true;
+  }
+
+  /**
+   * Get current quota status for user
+   * @private
+   */
+  async getQuotaStatus(jwtToken, userId) {
+    if (!this.quotaManager) {
+      return null;
+    }
+
+    try {
+      const status = await this.quotaManager.getQuotaStatus(
+        jwtToken,
+        userId,
+        'TRANSLATE'
+      );
+
+      return {
+        remaining: status.remaining,
+        dailyLimit: status.dailyLimit,
+        nextResetAt: status.nextResetAt,
+        nextResetIn: status.nextResetIn
+      };
+    } catch (error) {
+      this.log('Failed to get quota status:', error.message);
+      return null;
+    }
   }
 
   /**
@@ -455,7 +555,7 @@ export class TranslateService {
    */
   updateStatistics(language) {
     this.stats.totalTranslations++;
-    
+
     if (!this.stats.byLanguage[language]) {
       this.stats.byLanguage[language] = 0;
     }
@@ -468,7 +568,7 @@ export class TranslateService {
    */
   async trackTranslationEvent(eventName, data, userId = 'system') {
     if (!this.postHog) return;
-    
+
     try {
       await this.postHog.trackBusinessEvent(eventName, data, userId);
     } catch (error) {

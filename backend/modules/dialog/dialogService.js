@@ -238,8 +238,8 @@ class DialogService {
         log(`[${requestId}] No direct messages available`);
         return result;
       }
-      // const dialog = await this.createDialog(jwtToken, deterministicPair, occupantId, requestId, log);
-      // result.dialog = dialog;
+      const dialog = await this.createDialog(jwtToken, deterministicPair, occupantId, requestId, log);
+      result.dialog = dialog;
 
       return result;
     } catch (error) {
@@ -248,18 +248,5 @@ class DialogService {
     }
   }
 
-  async sendDirectMessageNotification(log) {
-    try {
-      log(`[${requestId}] Sending direct message notification...`);
-      const appwriteService = AppwriteService.getInstance();
-      // Here you would implement the logic to send a notification
-      // This could involve calling an external service, sending an email, etc.
-      // For now, we'll just log the action
-      log(`[${requestId}] Direct message notification sent successfully`);
-    } catch (error) {
-      log(`[${requestId}] ERROR in sendDirectMessageNotification: ${error.message}`);
-      throw new Error(`Failed to send direct message notification: ${error.message}`);
-    }
-  }
 }
 export default new DialogService();

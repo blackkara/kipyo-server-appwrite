@@ -27,7 +27,9 @@ export class ConfigManager {
       // Google Cloud Configuration
       google: {
         projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-        apiKey: process.env.GOOGLE_TRANSLATE_API_KEY
+        apiKey: process.env.GOOGLE_TRANSLATE_API_KEY,
+        visionApiKey: process.env.GOOGLE_VISION_API_KEY,
+        keyFilename: process.env.GOOGLE_CLOUD_KEY_FILE
       },
 
       // Feature Flags

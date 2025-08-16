@@ -9,6 +9,8 @@ import exploreRoutes from './modules/explore/exploreRoutes.js';
 import profileRoutes from './modules/profile/profileRoutes.js';
 
 import translateRouter from './api/translate/TranslateEndpoint.js';
+import visionRouter from './api/vision/ImageAnalysisEndpoint.js';
+import directMessageRouter from './api/directmessage/DirectMessageEndpoint.js';
 
 import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js'
 
@@ -16,6 +18,10 @@ import authenticateUser from './middleware/authenticateUser.js';
 
 import AppwriteService from './services/appwrite/AppwriteService.js';
 const appwriteService = AppwriteService.getInstance();
+
+
+
+
 setInterval(() => {
   const cacheStats = appwriteService.getCacheStats();
   console.log('Connection Cache:', cacheStats);
@@ -97,6 +103,12 @@ app.use('/api', interactionRoutes);
 app.use('/api', matchRoutes);
 app.use('/api', messageRoutes);
 app.use('/api', profileRoutes);
+
+// Translation API with quota management
+app.use('/api/translate', translateRouter);
+
+// Direct Message API
+app.use('/api/directmessage', directMessageRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
