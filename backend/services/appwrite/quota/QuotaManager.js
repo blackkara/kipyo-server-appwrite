@@ -259,13 +259,14 @@ export class QuotaManager {
     }
   }
 
+
   /**
    * Check and consume quota for a user
    * @param {string} jwtToken - User JWT token
    * @param {string} userId - User ID
    * @param {string} quotaType - Type of quota to check
    * @param {number} amount - Amount to consume (default 1)
-   * @returns {Promise<Object>} - Quota status and consumption result
+   * @returns {Promise<Object>} - Quota status and consumption result with all quotas status
    */
   async checkAndConsumeQuota(jwtToken, userId, quotaType, amount = 1) {
     try {
@@ -337,6 +338,9 @@ export class QuotaManager {
       if (currentQuota < amount) {
         const nextReset = this.getNextResetTime(profile.timezoneOffset || 0);
 
+        // Get all quota statuses even on failure
+        const allQuotaStatuses = await this.getAllQuotaStatuses(jwtToken, userId);
+
         return {
           success: false,
           quotaExceeded: true,
@@ -344,7 +348,8 @@ export class QuotaManager {
           dailyLimit: quotaConfig.dailyLimit,
           nextResetAt: nextReset.toISOString(),
           nextResetIn: this.getTimeUntilReset(nextReset),
-          message: `Daily ${quotaConfig.name} quota exceeded. Resets at ${nextReset.toLocaleString()}`
+          message: `Daily ${quotaConfig.name} quota exceeded. Resets at ${nextReset.toLocaleString()}`,
+          allQuotas: allQuotaStatuses
         };
       }
 
@@ -366,13 +371,17 @@ export class QuotaManager {
       // Track quota usage
       await this.trackQuotaUsage(userId, quotaType, amount, newQuota);
 
+      // Get all quota statuses after successful consumption
+      const allQuotaStatuses = await this.getAllQuotaStatuses(jwtToken, userId);
+
       return {
         success: true,
         quotaConsumed: amount,
         remaining: newQuota,
         dailyLimit: quotaConfig.dailyLimit,
         nextResetAt: nextReset.toISOString(),
-        nextResetIn: this.getTimeUntilReset(nextReset)
+        nextResetIn: this.getTimeUntilReset(nextReset),
+        allQuotas: allQuotaStatuses
       };
 
     } catch (error) {
@@ -380,7 +389,7 @@ export class QuotaManager {
       throw error;
     }
   }
-
+  
   /**
    * Check if quota should be reset based on user's timezone
    * @private

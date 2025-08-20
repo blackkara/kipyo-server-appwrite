@@ -47,58 +47,27 @@ class ProfileController {
   }
 
   async updateProfile(req, res) {
-    const startTime = Date.now();
-    const requestId = Math.random().toString(36).substring(7);
+    const { startTime, requestId, jwtToken, requestedUser } = req;
     const log = (message) => console.log(message);
     const error = (message, err) => console.error(message, err);
-
     try {
       log(`[${requestId}] updateProfile request started`);
 
-      try {
-        const appwriteService = AppwriteService.getInstance();
-        const authResult = await appwriteService.validateAndExtractUser(req.headers, requestId, log);
-
-        jwtToken = authResult.jwtToken;
-        requestedUser = authResult.userInfo;
-
-      } catch (tokenError) {
-        log(`[${requestId}] JWT validation failed: ${tokenError.message}`);
-        const duration = Date.now() - startTime;
-
-        return res.status(401).json({
-          success: false,
-          code: 401,
-          type: 'general_unauthorized',
-          message: tokenError.message,
-          requestId: requestId,
-          duration: duration
-        });
-      }
-
-      log(`[${requestId}] Request params: userId=${requestingUser.$id}, 
-        passions=${JSON.stringify(passions)}, 
-        habits=${JSON.stringify(habits)}, 
-        relationStatus=${relationStatus}, 
-        relationGoal=${relationGoal}, 
-        height=${height}, 
-        about=${about}, 
-        birthDate=${birthDate}, 
-        gender=${gender}`);
-
+      const { passions, habits, relationStatus, relationGoal, height, about, birthDate, gender } = req.body;
+      const reallyUpdatedFields = {};
+      if (passions && passions.length > 0) reallyUpdatedFields['passions'] = passions;
+      if (habits && habits.length > 0) reallyUpdatedFields['habits'] = habits;
+      if (relationStatus !== undefined && relationStatus.length > 0) reallyUpdatedFields['relationStatus'] = relationStatus;
+      if (relationGoal !== undefined && relationGoal.length > 0) reallyUpdatedFields['relationGoal'] = relationGoal;
+      if (height !== undefined && height.length > 0) reallyUpdatedFields['height'] = height;
+      if (about !== undefined && about.length > 0) reallyUpdatedFields['about'] = about;
+      if (birthDate !== undefined && birthDate.length > 0) reallyUpdatedFields['birthDate'] = birthDate;
+      if (gender !== undefined && gender.length > 0) reallyUpdatedFields['gender'] = gender;
+      
       const result = await profileService.updateProfile(
         jwtToken,
-        requestingUser.$id,
-        {
-          passions,
-          habits,
-          relationStatus,
-          relationGoal,
-          height,
-          about,
-          birthDate,
-          gender
-        },
+        requestedUser.$id,
+        reallyUpdatedFields,
         requestId,
         log
       );
