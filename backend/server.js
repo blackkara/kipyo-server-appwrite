@@ -11,6 +11,8 @@ import profileRoutes from './modules/profile/profileRoutes.js';
 import translateRouter from './api/translate/TranslateEndpoint.js';
 import visionRouter from './api/vision/ImageAnalysisEndpoint.js';
 import directMessageRouter from './api/directmessage/DirectMessageEndpoint.js';
+import accountRouter from './api/account/AccountDeletionEndpoint.js';
+import publicAccountRouter from './api/account/PublicAccountDeletionEndpoint.js';
 
 import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js'
 
@@ -96,6 +98,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve static files BEFORE authentication middleware
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Explicit route for delete-account page
+app.get('/delete-account.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'delete-account.html'));
+});
+
+// Public Account Management API (No Auth Required - MUST BE BEFORE authenticateUser)
+app.use('/api/account', publicAccountRouter);
+
+// Apply authentication middleware ONLY for authenticated routes
 app.use('/api', authenticateUser);
 app.use('/api', dialogRoutes);
 app.use('/api', exploreRoutes);
@@ -109,6 +123,9 @@ app.use('/api/translate', translateRouter);
 
 // Direct Message API
 app.use('/api/directmessage', directMessageRouter);
+
+// Account Management API (Authenticated)
+app.use('/api/account', accountRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {

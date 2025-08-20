@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Account - Kipyo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 450px;
+            width: 100%;
+            padding: 40px;
+            transition: transform 0.3s ease;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            color: #764ba2;
+            font-size: 36px;
+            font-weight: bold;
+        }
+
+        .step {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #856404;
+        }
+
+        .warning strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input[type="email"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        input[type="email"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .otp-input {
+            text-align: center;
+            font-size: 24px;
+            letter-spacing: 10px;
+            font-weight: bold;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3);
+        }
+
+        .btn-danger:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .timer {
+            color: #666;
+            font-size: 13px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+
+        .final-message {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .final-message .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .final-message h2 {
+            margin-bottom: 20px;
+        }
+
+        .final-message p {
+            color: #666;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>Kipyo</h1>
+        </div>
+
+        <!-- Step 1: Email Input -->
+        <div id="step1" class="step active">
+            <h2>Delete Your Account</h2>
+            <p class="subtitle">Enter your email address to begin the account deletion process.</p>
+            
+            <div class="warning">
+                <strong>⚠️ Warning</strong>
+                Account deletion is permanent. All your data, matches, and messages will be permanently deleted and cannot be recovered.
+            </div>
+
+            <div id="step1-message"></div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" placeholder="your-email@example.com" required>
+            </div>
+
+            <button id="sendOtpBtn" class="btn-primary" onclick="sendOTP()">
+                Send Verification Code
+            </button>
+
+            <div class="back-link">
+                <a href="https://kipyo.com">Return to Kipyo</a>
+            </div>
+        </div>
+
+        <!-- Step 2: OTP Verification -->
+        <div id="step2" class="step">
+            <h2>Enter Verification Code</h2>
+            <p class="subtitle">We've sent a 6-digit code to <span id="emailDisplay"></span></p>
+
+            <div id="step2-message"></div>
+
+            <div class="form-group">
+                <label for="otp">Verification Code</label>
+                <input type="text" id="otp" class="otp-input" maxlength="6" placeholder="000000" required>
+            </div>
+
+            <button id="verifyOtpBtn" class="btn-primary" onclick="verifyOTP()" disabled>
+                Verify Code
+            </button>
+
+            <button class="btn-secondary" onclick="goToStep(1)">
+                Back
+            </button>
+
+            <div class="timer" id="timer"></div>
+        </div>
+
+        <!-- Step 3: Final Confirmation -->
+        <div id="step3" class="step">
+            <h2>Final Confirmation</h2>
+            <p class="subtitle">This is your last chance to cancel. Once you click delete, your account will be permanently removed.</p>
+
+            <div class="warning" style="background: #f8d7da; border-color: #f5c6cb; color: #721c24;">
+                <strong>🗑️ This action cannot be undone!</strong>
+                All your data will be permanently deleted including:
+                <ul style="margin-top: 10px; margin-left: 20px;">
+                    <li>Profile information</li>
+                    <li>All matches and likes</li>
+                    <li>Messages and conversations</li>
+                    <li>Photos and media</li>
+                </ul>
+            </div>
+
+            <div id="step3-message"></div>
+
+            <button id="deleteBtn" class="btn-danger" onclick="deleteAccount()">
+                Delete My Account Permanently
+            </button>
+
+            <button class="btn-secondary" onclick="goToStep(1)">
+                Cancel
+            </button>
+        </div>
+
+        <!-- Step 4: Success -->
+        <div id="step4" class="step">
+            <div class="final-message">
+                <div class="icon">✅</div>
+                <h2>Account Deleted</h2>
+                <p>Your account has been permanently deleted.</p>
+                <p style="margin-top: 20px;">We're sorry to see you go. Thank you for being part of Kipyo.</p>
+                
+                <div class="back-link" style="margin-top: 30px;">
+                    <a href="https://kipyo.com">Visit Kipyo</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentEmail = '';
+        let deletionToken = '';
+        let timerInterval = null;
+
+        // Listen for OTP input changes
+        document.getElementById('otp').addEventListener('input', function(e) {
+            const value = e.target.value.replace(/\D/g, '');
+            e.target.value = value;
+            
+            // Enable verify button when 6 digits are entered
+            document.getElementById('verifyOtpBtn').disabled = value.length !== 6;
+        });
+
+        function showMessage(stepId, message, type) {
+            const messageDiv = document.getElementById(`${stepId}-message`);
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            
+            // Auto hide success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        function goToStep(stepNumber) {
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active');
+            });
+            document.getElementById(`step${stepNumber}`).classList.add('active');
+            
+            // Clear timers when leaving step 2
+            if (stepNumber !== 2 && timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        async function sendOTP() {
+            const email = document.getElementById('email').value.trim();
+            
+            if (!email) {
+                showMessage('step1', 'Please enter your email address', 'error');
+                return;
+            }
+
+            if (!validateEmail(email)) {
+                showMessage('step1', 'Please enter a valid email address', 'error');
+                return;
+            }
+
+            const button = document.getElementById('sendOtpBtn');
+            button.disabled = true;
+            button.innerHTML = 'Sending...<span class="loading"></span>';
+
+            try {
+                const response = await fetch('/api/account/public/request-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentEmail = email;
+                    document.getElementById('emailDisplay').textContent = email;
+                    showMessage('step1', 'Verification code sent!', 'success');
+                    
+                    setTimeout(() => {
+                        goToStep(2);
+                        startTimer(600); // 10 minutes
+                    }, 1000);
+                } else {
+                    showMessage('step1', data.message || 'Failed to send verification code', 'error');
+                }
+            } catch (error) {
+                showMessage('step1', 'Network error. Please try again.', 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Send Verification Code';
+            }
+        }
+
+        async function verifyOTP() {
+            const otp = document.getElementById('otp').value.trim();
+            
+            if (!otp || otp.length !== 6) {
+                showMessage('step2', 'Please enter the 6-digit code', 'error');
+                return;
+            }
+
+            const button = document.getElementById('verifyOtpBtn');
+            button.disabled = true;
+            button.innerHTML = 'Verifying...<span class="loading"></span>';
+
+            try {
+                const response = await fetch('/api/account/public/verify-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        email: currentEmail, 
+                        otp 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    deletionToken = data.data.deletionToken;
+                    showMessage('step2', 'Code verified successfully!', 'success');
+                    
+                    setTimeout(() => {
+                        goToStep(3);
+                    }, 1000);
+                } else {
+                    showMessage('step2', data.message || 'Invalid verification code', 'error');
+                    
+                    if (data.attemptsRemaining !== undefined) {
+                        showMessage('step2', `Invalid code. ${data.attemptsRemaining} attempts remaining.`, 'error');
+                    }
+                }
+            } catch (error) {
+                showMessage('step2', 'Network error. Please try again.', 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Verify Code';
+            }
+        }
+
+        async function deleteAccount() {
+            if (!deletionToken) {
+                showMessage('step3', 'Invalid session. Please start over.', 'error');
+                setTimeout(() => goToStep(1), 2000);
+                return;
+            }
+
+            const button = document.getElementById('deleteBtn');
+            
+            // Confirm dialog
+            if (!confirm('Are you absolutely sure? This action cannot be undone!')) {
+                return;
+            }
+
+            button.disabled = true;
+            button.innerHTML = 'Deleting Account...<span class="loading"></span>';
+
+            try {
+                const response = await fetch('/api/account/public/delete', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        deletionToken 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('step3', 'Account deleted successfully', 'success');
+                    
+                    setTimeout(() => {
+                        goToStep(4);
+                    }, 1500);
+                } else {
+                    showMessage('step3', data.message || 'Failed to delete account', 'error');
+                    
+                    if (data.message && data.message.includes('expired')) {
+                        setTimeout(() => goToStep(1), 3000);
+                    }
+                }
+            } catch (error) {
+                showMessage('step3', 'Network error. Please try again.', 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Delete My Account Permanently';
+            }
+        }
+
+        function validateEmail(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        }
+
+        function startTimer(seconds) {
+            let timeRemaining = seconds;
+            const timerDiv = document.getElementById('timer');
+            
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
+            timerInterval = setInterval(() => {
+                const minutes = Math.floor(timeRemaining / 60);
+                const secs = timeRemaining % 60;
+                timerDiv.textContent = `Code expires in ${minutes}:${secs.toString().padStart(2, '0')}`;
+                
+                timeRemaining--;
+                
+                if (timeRemaining < 0) {
+                    clearInterval(timerInterval);
+                    timerDiv.textContent = 'Code expired. Please request a new one.';
+                    showMessage('step2', 'Verification code expired', 'error');
+                    setTimeout(() => goToStep(1), 3000);
+                }
+            }, 1000);
+        }
+
+        // Prevent going back from success page
+        window.addEventListener('popstate', function(e) {
+            if (document.getElementById('step4').classList.contains('active')) {
+                history.pushState(null, null, window.location.pathname);
+            }
+        });
+    </script>
+</body>
+</html>

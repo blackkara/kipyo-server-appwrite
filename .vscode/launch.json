@@ -53,7 +53,13 @@
         "POSTHOG_API_KEY": "phc_ljNJimUeCYZy1IqQeoquGLq20QV59l2EvMo8KGZZoFp",
         "GOOGLE_CLOUD_PROJECT_ID": "kipyo-prod",
         "GOOGLE_TRANSLATE_API_KEY": "",
-        "GOOGLE_CLOUD_KEY_FILE":"./backend/google-translate-keyfile.json"
+        "GOOGLE_CLOUD_KEY_FILE": "./backend/google-translate-keyfile.json",
+        "SMTP_USER": "info@kipyo.com",
+        "SMTP_PASS": "vobszatkafgauxkd",
+        "SMTP_HOST": "smtp.yandex.com.tr",
+        "SMTP_PORT": "465",
+        "SMTP_SECURE": "true",
+        "EMAIL_FROM": "info@kipyo.com"
       }
     }
   ]

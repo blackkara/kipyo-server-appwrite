@@ -23,6 +23,7 @@
     "install": "^0.13.0",
     "multer": "^2.0.2",
     "node-appwrite": "^17.2.0",
+    "nodemailer": "^7.0.5",
     "npm": "^11.4.2",
     "posthog-node": "^5.6.0"
   },
