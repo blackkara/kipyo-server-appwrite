@@ -59,19 +59,21 @@ export class QuotaManager {
         totalRemaining: 0,
         totalUsed: 0,
         timezoneOffset: profile.timezoneOffset || 0,
-        isSuspended: profile.quotaSuspended || false
+        isSuspended: profile.quotaSuspended || false,
+        suspensionReason: profile.quotaSuspensionReason,
+        suspensionDate: profile.quotaSuspensionDate
       };
 
       // Check if user is suspended
-      if (summary.isSuspended) {
-        return {
-          success: false,
-          suspended: true,
-          suspensionReason: profile.quotaSuspensionReason,
-          suspensionDate: profile.quotaSuspensionDate,
-          message: 'Quota access is temporarily restricted due to suspicious activity'
-        };
-      }
+      // if (summary.isSuspended) {
+      //   return {
+      //     success: false,
+      //     suspended: true,
+      //     suspensionReason: profile.quotaSuspensionReason,
+      //     suspensionDate: profile.quotaSuspensionDate,
+      //     message: 'Quota access is temporarily restricted due to suspicious activity'
+      //   };
+      // }
 
       // Process each quota type
       for (const type of typesToCheck) {

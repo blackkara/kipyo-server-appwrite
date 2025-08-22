@@ -770,110 +770,32 @@ class ProfileService {
           process.env.DB_COLLECTION_PROFILES_ID,
           userId
         );
-
-        if (!profile) {
-          throw new AppError(ERROR_CODES.PROFILE_NOT_FOUND, 'Profile not found');
-        }
       } catch (dbError) {
         if (dbError instanceof AppError) {
           throw dbError;
+        }
+        if (dbError.type === 'document_not_found') {
+          throw new AppError(ERROR_CODES.PROFILE_NOT_FOUND, 'Profile not found');
         }
         throw new AppError(ERROR_CODES.DATABASE_OPERATION_FAILED, dbError.message, dbError);
       }
 
       log(`[${requestId}] Profile found for user: ${userId}`);
-
       // ===========================================
       // TIMEZONE VE RESET KONTROLÜ (YENİ)
       // ===========================================
-
-      let updatedProfile = profile;
-      let timezoneResult = null;
-      const updateData = {};
-
-      let currentTimezoneOffset = profile.timezoneOffset;
-      let timezoneChangeDate = profile.timezoneChangeDate || null;
-      let timezoneTotalChanges = profile.timezoneTotalChanges || 0;
-
-
-      if (requestedTimezone) {
-        try {
-          log(`[${requestId}] Processing timezone check - Requested: ${requestedTimezone}`);
-          timezoneResult = await TimezoneValidationTool.validateTimezoneChange(
-            currentTimezoneOffset,
-            requestedTimezone,
-            timezoneChangeDate,
-            timezoneTotalChanges,
-            requestId,
-            log
-          );
-
-          // Eğer update gerekiyorsa, veritabanını güncelle
-          if (timezoneResult.shouldChangeTimezone) {
-            currentTimezoneOffset = timezoneResult.acceptedTimezone;
-            timezoneChangeDate = new Date().toISOString();
-            timezoneTotalChanges = (profile.timezoneTotalChanges || 0) + 1;
-
-            updateData.timezoneOffset = currentTimezoneOffset;
-            updateData.timezoneChangeDate = timezoneChangeDate;
-            updateData.timezoneTotalChanges = timezoneTotalChanges;
-          }
-
-        } catch (timezoneError) {
-          // Timezone/reset hataları kullanıcıya anlamlı mesajlarla dönülür
-          log(`[${requestId}] Timezone/reset error: ${timezoneError.message}`);
-          throw timezoneError; // AppError olarak fırlatılır
-        }
-      }
-
+      const timeZoneUpdateResult = await appwriteService.quotaManager.updateUserTimezone(jwtToken, userId, requestedTimezone);
       log(`[${requestId}] GetProfile pre validation - Remaining direct messages: ${profile.dailyDirectMessageRemaining}`);
-      const resetStats = ProfileUtils.validateDailyReset(
-        currentTimezoneOffset,
-        updatedProfile.dailyDirectMessageRemainingResetDate,
-        updatedProfile.dailyDirectMessageRemaining,
-        requestId,
-        log
-      );
-      log(`[${requestId}] GetProfile after validation - Remaining direct messages: ${resetStats.newMessageCount}`);
-
-      if (resetStats.shouldReset) {
-        updateData.dailyDirectMessageRemaining = resetStats.newMessageCount;
-        updateData.dailyDirectMessageRemainingResetDate = new Date().toISOString();
-        log(`[${requestId}] Daily reset should be performed - resetting message count to ${resetStats.newMessageCount}`);
-      }
-
-
-
-      if (Object.keys(updateData).length > 0) {
-        updatedProfile = await appwriteService.updateDocument(
-          jwtToken,
-          process.env.DB_COLLECTION_PROFILES_ID,
-          userId,
-          updateData
-        );
-
-        log(`[${requestId}] Profile updated with timezone and reset data`);
-      }
-
-      // ===========================================
-      // PROFİLE KOMPLETLEŞME ORANINI HESAPLA (YENİ)
-      // ===========================================
-
-      const profileCompletionStats = ProfileUtils.getProfileCompletionDetails(updatedProfile);
-      Object.assign(updatedProfile, { profileCompletionStats: profileCompletionStats });
-      Object.assign(updatedProfile, { resetStats: resetStats });
+      const profileCompletionStats = ProfileUtils.getProfileCompletionDetails(profile);
+      Object.assign(profile, { profileCompletionStats: profileCompletionStats });
 
       const operationDuration = Date.now() - operationStart;
       log(`[${requestId}] Profile retrieved successfully in ${operationDuration}ms`);
 
-
-      await appwriteService.quotaManager.resetUserQuotas(jwtToken, userId);
-
       const quotas = await appwriteService.quotaManager.getAllQuotaStatuses(jwtToken, userId);
-      Object.assign(updatedProfile, { quotaStatus: quotas });
+      Object.assign(profile, { quotaStatus: quotas });
 
-      return updatedProfile;
-
+      return profile;
     } catch (error) {
       log(`[${requestId}] ERROR in getProfile: ${error.message}`);
 

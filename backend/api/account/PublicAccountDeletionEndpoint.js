@@ -140,30 +140,19 @@ async function deleteUserData(userId, email) {
     try {
       const matchesCollection = process.env.DB_COLLECTION_MATCHES_ID;
       
-      // Query for userFirst
-      const matchesAsFirst = await databases.listDocuments(
+      // Bulk delete all matches with a single query
+      await databases.deleteDocuments(
         databaseId,
         matchesCollection,
         [
-          Query.equal('userFirst', userId)
+          Query.or([
+            Query.equal('userFirst', userId),
+            Query.equal('userSecond', userId)
+          ])
         ]
       );
       
-      // Query for userSecond
-      const matchesAsSecond = await databases.listDocuments(
-        databaseId,
-        matchesCollection,
-        [
-          Query.equal('userSecond', userId)
-        ]
-      );
-      
-      // Combine and delete all matches
-      const allMatches = [...matchesAsFirst.documents, ...matchesAsSecond.documents];
-      for (const match of allMatches) {
-        await databases.deleteDocument(databaseId, matchesCollection, match.$id);
-      }
-      deletionLog.push(`Deleted ${allMatches.length} matches`);
+      deletionLog.push(`Deleted matches for user ${userId}`);
     } catch (err) {
       console.error('Error deleting matches:', err);
     }
@@ -172,30 +161,19 @@ async function deleteUserData(userId, email) {
     try {
       const dislikesCollection = process.env.DB_COLLECTION_DISLIKES_ID;
       
-      // Query for dislikerId
-      const dislikesAsLiker = await databases.listDocuments(
+      // Bulk delete all dislikes with a single query
+      await databases.deleteDocuments(
         databaseId,
         dislikesCollection,
         [
-          Query.equal('dislikerId', userId)
+          Query.or([
+            Query.equal('dislikerId', userId),
+            Query.equal('dislikedId', userId)
+          ])
         ]
       );
       
-      // Query for dislikedId
-      const dislikesAsDisliked = await databases.listDocuments(
-        databaseId,
-        dislikesCollection,
-        [
-          Query.equal('dislikedId', userId)
-        ]
-      );
-      
-      // Combine and delete all dislikes
-      const allDislikes = [...dislikesAsLiker.documents, ...dislikesAsDisliked.documents];
-      for (const dislike of allDislikes) {
-        await databases.deleteDocument(databaseId, dislikesCollection, dislike.$id);
-      }
-      deletionLog.push(`Deleted ${allDislikes.length} dislikes`);
+      deletionLog.push(`Deleted dislikes for user ${userId}`);
     } catch (err) {
       console.error('Error deleting dislikes:', err);
     }
@@ -204,35 +182,24 @@ async function deleteUserData(userId, email) {
     try {
       const likesCollection = process.env.DB_COLLECTION_LIKES_ID;
       
-      // Query for likerId
-      const likesAsLiker = await databases.listDocuments(
+      // Bulk delete all likes with a single query
+      await databases.deleteDocuments(
         databaseId,
         likesCollection,
         [
-          Query.equal('likerId', userId)
+          Query.or([
+            Query.equal('likerId', userId),
+            Query.equal('likedId', userId)
+          ])
         ]
       );
       
-      // Query for likedId
-      const likesAsLiked = await databases.listDocuments(
-        databaseId,
-        likesCollection,
-        [
-          Query.equal('likedId', userId)
-        ]
-      );
-      
-      // Combine and delete all likes
-      const allLikes = [...likesAsLiker.documents, ...likesAsLiked.documents];
-      for (const like of allLikes) {
-        await databases.deleteDocument(databaseId, likesCollection, like.$id);
-      }
-      deletionLog.push(`Deleted ${allLikes.length} likes`);
+      deletionLog.push(`Deleted likes for user ${userId}`);
     } catch (err) {
       console.error('Error deleting likes:', err);
     }
     
-    // 5. Update user profile - Set isActive = false (DO NOT DELETE)
+    // 5. Update user profile - Set isDeleted = true (DO NOT DELETE)
     try {
       const profilesCollection = process.env.DB_COLLECTION_PROFILES_ID;
       await databases.updateDocument(
@@ -240,8 +207,8 @@ async function deleteUserData(userId, email) {
         profilesCollection,
         userId,
         {
-          isActive: false,
-          deletedAt: new Date().toISOString()
+          isDeleted: false,
+          deleteDate: new Date().toISOString()
         }
       );
       deletionLog.push('User profile deactivated (isActive = false)');

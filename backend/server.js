@@ -24,10 +24,10 @@ const appwriteService = AppwriteService.getInstance();
 
 
 
-setInterval(() => {
-  const cacheStats = appwriteService.getCacheStats();
-  console.log('Connection Cache:', cacheStats);
-}, 5000); // 5 seconds
+// setInterval(() => {
+//   const cacheStats = appwriteService.getCacheStats();
+//   console.log('Connection Cache:', cacheStats);
+// }, 5000); // 5 seconds
 
 
 import { initializeApp, cert } from 'firebase-admin/app';
