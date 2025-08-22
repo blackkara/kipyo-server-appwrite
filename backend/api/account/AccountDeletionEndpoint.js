@@ -24,23 +24,7 @@ router.delete('/deletion', authenticateUser, async (req, res) => {
     // Perform account deletion
     log(`Starting account deletion for user ${requestedUser.$id}`);
     
-    // 1. Delete user's messages
-    try {
-      await appwriteService.deleteUserMessages(jwtToken, requestedUser.$id);
-      log(`Deleted messages for user ${requestedUser.$id}`);
-    } catch (err) {
-      log(`Failed to delete messages: ${err.message}`);
-    }
-
-    // 2. Delete user's matches
-    try {
-      await appwriteService.deleteUserMatches(jwtToken, requestedUser.$id);
-      log(`Deleted matches for user ${requestedUser.$id}`);
-    } catch (err) {
-      log(`Failed to delete matches: ${err.message}`);
-    }
-
-    // 3. Delete user's profile data
+    // 1. Delete user's profile data
     try {
       await appwriteService.deleteUserProfile(jwtToken, requestedUser.$id);
       log(`Deleted profile for user ${requestedUser.$id}`);
@@ -48,7 +32,7 @@ router.delete('/deletion', authenticateUser, async (req, res) => {
       log(`Failed to delete profile: ${err.message}`);
     }
 
-    // 4. Delete user account from Appwrite
+    // 2. Delete user account from Appwrite
     try {
       await appwriteService.deleteUserAccount(jwtToken, requestedUser.$id);
       log(`Deleted account for user ${requestedUser.$id}`);

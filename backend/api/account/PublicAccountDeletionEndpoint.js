@@ -133,90 +133,20 @@ async function deleteUserData(userId, email) {
   
   try {
     
-    // 1. Messages - DO NOT DELETE (keep for other users)
-    deletionLog.push('Messages kept for other users');
-    
-    // 2. Delete user's matches (where userFirst == userId OR userSecond == userId)
-    try {
-      const matchesCollection = process.env.DB_COLLECTION_MATCHES_ID;
-      
-      // Bulk delete all matches with a single query
-      await databases.deleteDocuments(
-        databaseId,
-        matchesCollection,
-        [
-          Query.or([
-            Query.equal('userFirst', userId),
-            Query.equal('userSecond', userId)
-          ])
-        ]
-      );
-      
-      deletionLog.push(`Deleted matches for user ${userId}`);
-    } catch (err) {
-      console.error('Error deleting matches:', err);
-    }
-    
-    // 3. Delete dislikes (where dislikerId == userId OR dislikedId == userId)
-    try {
-      const dislikesCollection = process.env.DB_COLLECTION_DISLIKES_ID;
-      
-      // Bulk delete all dislikes with a single query
-      await databases.deleteDocuments(
-        databaseId,
-        dislikesCollection,
-        [
-          Query.or([
-            Query.equal('dislikerId', userId),
-            Query.equal('dislikedId', userId)
-          ])
-        ]
-      );
-      
-      deletionLog.push(`Deleted dislikes for user ${userId}`);
-    } catch (err) {
-      console.error('Error deleting dislikes:', err);
-    }
-    
-    // 4. Delete likes (where likerId == userId OR likedId == userId)
-    try {
-      const likesCollection = process.env.DB_COLLECTION_LIKES_ID;
-      
-      // Bulk delete all likes with a single query
-      await databases.deleteDocuments(
-        databaseId,
-        likesCollection,
-        [
-          Query.or([
-            Query.equal('likerId', userId),
-            Query.equal('likedId', userId)
-          ])
-        ]
-      );
-      
-      deletionLog.push(`Deleted likes for user ${userId}`);
-    } catch (err) {
-      console.error('Error deleting likes:', err);
-    }
-    
-    // 5. Update user profile - Set isDeleted = true (DO NOT DELETE)
+    // 1. Delete user profile
     try {
       const profilesCollection = process.env.DB_COLLECTION_PROFILES_ID;
-      await databases.updateDocument(
+      await databases.deleteDocument(
         databaseId,
         profilesCollection,
-        userId,
-        {
-          isDeleted: false,
-          deleteDate: new Date().toISOString()
-        }
+        userId
       );
-      deletionLog.push('User profile deactivated (isActive = false)');
+      deletionLog.push('User profile deleted');
     } catch (err) {
-      console.error('Error deactivating user profile:', err);
+      console.error('Error deleting user profile:', err);
     }
     
-    // 6. Delete Appwrite account
+    // 2. Delete Appwrite account
     try {
       const Users = await import('node-appwrite').then(m => m.Users);
       const users = new Users(client);

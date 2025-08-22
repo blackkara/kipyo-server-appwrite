@@ -58,7 +58,7 @@ export class QuotaManager {
         totalQuotas: 0,
         totalRemaining: 0,
         totalUsed: 0,
-        timezoneOffset: profile.timezoneOffset || 0,
+        timezoneOffset: profile.timezoneOffset !== null && profile.timezoneOffset !== undefined ? profile.timezoneOffset : 0,
         isSuspended: profile.quotaSuspended || false,
         suspensionReason: profile.quotaSuspensionReason,
         suspensionDate: profile.quotaSuspensionDate
@@ -94,7 +94,7 @@ export class QuotaManager {
           currentQuota = quotaConfig.dailyLimit;
         }
 
-        const nextReset = this.getNextResetTime(profile.timezoneOffset || 0);
+        const nextReset = this.getNextResetTime(profile.timezoneOffset !== null && profile.timezoneOffset !== undefined ? profile.timezoneOffset : 0);
         const used = quotaConfig.dailyLimit - currentQuota;
 
         results[quotaConfig.name] = {
@@ -170,7 +170,7 @@ export class QuotaManager {
       summary.canSendMessage = summary.directMessage.available > 0;
 
       // Get next reset time
-      const nextReset = this.getNextResetTime(profile.timezoneOffset || 0);
+      const nextReset = this.getNextResetTime(profile.timezoneOffset !== null && profile.timezoneOffset !== undefined ? profile.timezoneOffset : 0);
       summary.nextResetIn = this.getTimeUntilReset(nextReset);
 
       return summary;
@@ -338,7 +338,7 @@ export class QuotaManager {
       }
 
       if (currentQuota < amount) {
-        const nextReset = this.getNextResetTime(profile.timezoneOffset || 0);
+        const nextReset = this.getNextResetTime(profile.timezoneOffset !== null && profile.timezoneOffset !== undefined ? profile.timezoneOffset : 0);
 
         // Get all quota statuses even on failure
         const allQuotaStatuses = await this.getAllQuotaStatuses(jwtToken, userId);
@@ -368,7 +368,7 @@ export class QuotaManager {
         }
       );
 
-      const nextReset = this.getNextResetTime(profile.timezoneOffset || 0);
+      const nextReset = this.getNextResetTime(profile.timezoneOffset !== null && profile.timezoneOffset !== undefined ? profile.timezoneOffset : 0);
 
       // Track quota usage
       await this.trackQuotaUsage(userId, quotaType, amount, newQuota);
@@ -401,41 +401,42 @@ export class QuotaManager {
    * @private
    */
   shouldResetQuota(profile, quotaConfig) {
-    const timezoneOffset = profile.timezoneOffset || 0; // dakika cinsinden
+    // timezoneOffset: dakika cinsinden offset değeri
+    // Örnek: UTC+3 için timezoneOffset = 180, UTC-5 için timezoneOffset = -300
+    const timezoneOffset = profile.timezoneOffset !== null && profile.timezoneOffset !== undefined ? profile.timezoneOffset : 0;
     const lastResetDate = profile[`${quotaConfig.field}ResetDate`];
 
     // Şu anki UTC zamanı
     const nowUTC = new Date();
+    const nowUTCTime = nowUTC.getTime();
 
-    // Kullanıcının şu anki yerel zamanı
-    const userLocalTime = new Date(nowUTC.getTime() + (timezoneOffset * 60 * 1000));
-
-    // Kullanıcının bugünü (YYYY-MM-DD formatında)
-    const userToday = userLocalTime.toISOString().split('T')[0];
+    // Kullanıcının yerel zamanında bugünün başlangıcını (gece yarısı) bul
+    // Önce UTC'de bugünün başlangıcını bul
+    const todayUTC = new Date(nowUTC);
+    todayUTC.setUTCHours(0, 0, 0, 0);
+    
+    // Sonra kullanıcının timezone'una göre ayarla
+    // Kullanıcının gece yarısı UTC'de ne zaman?
+    const userMidnightUTC = new Date(todayUTC.getTime() - (timezoneOffset * 60 * 1000));
+    
+    // Eğer kullanıcının gece yarısı henüz gelmemişse, bir gün öncesini al
+    if (userMidnightUTC.getTime() > nowUTCTime) {
+      userMidnightUTC.setDate(userMidnightUTC.getDate() - 1);
+    }
 
     if (!lastResetDate) {
-      // İlk reset - kullanıcının bugün gece yarısını UTC'ye çevir
-      const userMidnightLocal = new Date(userToday + 'T00:00:00.000Z');
-      const userMidnightUTC = new Date(userMidnightLocal.getTime() - (timezoneOffset * 60 * 1000));
-
+      // İlk reset
       return {
         shouldReset: true,
         resetDate: userMidnightUTC.toISOString()
       };
     }
 
-    // Son reset tarihini kullanıcı timezone'una çevir
-    const lastResetUTC = new Date(lastResetDate);
-    const lastResetLocal = new Date(lastResetUTC.getTime() + (timezoneOffset * 60 * 1000));
-
-    // Son reset'in günü (YYYY-MM-DD formatında)
-    const lastResetDay = lastResetLocal.toISOString().split('T')[0];
-
-    // Farklı günlerdeyse reset yap
-    if (userToday !== lastResetDay) {
-      const userMidnightLocal = new Date(userToday + 'T00:00:00.000Z');
-      const userMidnightUTC = new Date(userMidnightLocal.getTime() - (timezoneOffset * 60 * 1000));
-
+    // Son reset zamanını kontrol et
+    const lastResetTime = new Date(lastResetDate).getTime();
+    
+    // Eğer son reset bugünün gece yarısından önceyse, reset gerekli
+    if (lastResetTime < userMidnightUTC.getTime()) {
       return {
         shouldReset: true,
         resetDate: userMidnightUTC.toISOString()
@@ -493,10 +494,20 @@ export class QuotaManager {
       score: 0
     };
 
-    const currentOffset = profile.timezoneOffset || 0;
+    const currentOffset = profile.timezoneOffset;
     const lastChangeDate = profile.timezoneChangeDate;
     const totalChangesToday = profile.timezoneTotalChanges || 0;
     const lastOffset = profile.lastTimezoneOffset;
+
+    // Skip fraud detection for first-time timezone changes
+    // If there's no lastTimezoneOffset, this is either:
+    // 1. A new user setting timezone for the first time
+    // 2. An existing user who never changed timezone before
+    // In both cases, we shouldn't flag as suspicious
+    const isFirstTimezoneChange = (lastOffset === undefined || lastOffset === null);
+    if (isFirstTimezoneChange) {
+      return result; // No suspicious activity for first timezone change
+    }
 
     // Check for too many changes in one day
     if (totalChangesToday >= this.fraudThresholds.maxTimezoneChangesPerDay) {
@@ -594,9 +605,24 @@ export class QuotaManager {
         throw new Error('User profile not found');
       }
 
-      const currentOffset = profile.timezoneOffset || 0;
+      // Keep NULL values as NULL for new users, don't default to 0
+      const currentOffset = profile.timezoneOffset;
       const lastChangeDate = profile.timezoneChangeDate;
       let totalChangesToday = profile.timezoneTotalChanges || 0;
+      
+      // Check if timezone actually changed
+      if (currentOffset === newOffset) {
+        // No change needed, return early
+        return {
+          success: true,
+          newOffset,
+          previousOffset: currentOffset,
+          changesToday: totalChangesToday,
+          isSuspicious: false,
+          suspicionReasons: [],
+          noChangeNeeded: true
+        };
+      }
 
       // Check if it's a new day for reset counter
       if (lastChangeDate) {
@@ -608,16 +634,20 @@ export class QuotaManager {
         }
       }
 
-      // Increment change counter
+      // Increment change counter only for actual changes
       totalChangesToday++;
 
       // Update profile
       const updateData = {
         timezoneOffset: newOffset,
-        lastTimezoneOffset: currentOffset,
         timezoneChangeDate: new Date().toISOString(),
         timezoneTotalChanges: totalChangesToday
       };
+      
+      // Only set lastTimezoneOffset if there was a previous value
+      if (currentOffset !== null && currentOffset !== undefined) {
+        updateData.lastTimezoneOffset = currentOffset;
+      }
 
       await this.documentOps.updateDocument(
         jwtToken,
@@ -678,7 +708,7 @@ export class QuotaManager {
         currentQuota = quotaConfig.dailyLimit;
       }
 
-      const nextReset = this.getNextResetTime(profile.timezoneOffset || 0);
+      const nextReset = this.getNextResetTime(profile.timezoneOffset !== null && profile.timezoneOffset !== undefined ? profile.timezoneOffset : 0);
 
       return {
         quotaType: quotaConfig.name,
