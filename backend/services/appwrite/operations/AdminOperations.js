@@ -526,6 +526,119 @@ export class AdminOperations {
     }, context);
   }
 
+  /**
+   * Get document with admin privileges
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
+   * @param {string} collectionId - Collection ID
+   * @param {string} documentId - Document ID
+   * @returns {Promise<Object>} - Document
+   */
+  async getDocument(jwtToken, collectionId, documentId) {
+    const context = {
+      methodName: 'getDocument',
+      collectionId,
+      documentId
+    };
+
+    return this.executeAdminOperation(async () => {
+      this.log(`[ADMIN ACTION] Getting document ${documentId} from ${collectionId}`);
+
+      const databases = this.clientManager.getAdminDatabases();
+      const databaseId = this.getDatabaseId();
+      
+      const result = await databases.getDocument(
+        databaseId,
+        collectionId,
+        documentId
+      );
+
+      await this.trackAdminEvent('admin_document_read', {
+        collection_id: collectionId,
+        document_id: documentId
+      }, 'admin');
+
+      return result;
+    }, context);
+  }
+
+  /**
+   * List documents with admin privileges
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
+   * @param {string} collectionId - Collection ID
+   * @param {Array} queries - Query array
+   * @returns {Promise<Object>} - Documents list
+   */
+  async listDocuments(jwtToken, collectionId, queries = []) {
+    const context = {
+      methodName: 'listDocuments',
+      collectionId,
+      additionalData: { queriesCount: queries.length }
+    };
+
+    return this.executeAdminOperation(async () => {
+      this.log(`[ADMIN ACTION] Listing documents in ${collectionId}`);
+
+      const databases = this.clientManager.getAdminDatabases();
+      const databaseId = this.getDatabaseId();
+      
+      const result = await databases.listDocuments(
+        databaseId,
+        collectionId,
+        queries
+      );
+
+      await this.trackAdminEvent('admin_documents_listed', {
+        collection_id: collectionId,
+        queries_count: queries.length,
+        documents_found: result.documents.length
+      }, 'admin');
+
+      return result;
+    }, context);
+  }
+
+  /**
+   * Update document with admin privileges (simplified version without permissions change)
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
+   * @param {string} collectionId - Collection ID
+   * @param {string} documentId - Document ID
+   * @param {Object} data - Update data
+   * @returns {Promise<Object>} - Updated document
+   */
+  async updateDocument(jwtToken, collectionId, documentId, data) {
+    const context = {
+      methodName: 'updateDocument',
+      collectionId,
+      documentId,
+      additionalData: {
+        hasData: !!data,
+        dataKeys: Object.keys(data || {})
+      }
+    };
+
+    return this.executeAdminOperation(async () => {
+      this.log(`[ADMIN ACTION] Updating document ${documentId} in ${collectionId}`);
+
+      const databases = this.clientManager.getAdminDatabases();
+      const databaseId = this.getDatabaseId();
+      
+      const result = await databases.updateDocument(
+        databaseId,
+        collectionId,
+        documentId,
+        data
+      );
+
+      await this.trackAdminEvent('admin_document_updated_simple', {
+        collection_id: collectionId,
+        document_id: documentId,
+        fields_updated: Object.keys(data || {}).length
+      }, 'admin');
+
+      return result;
+    }, context);
+  }
+
   // Helper methods
 
   /**

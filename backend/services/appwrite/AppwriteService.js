@@ -166,7 +166,7 @@ class AppwriteService {
     // Quota management module
     this.quotaManager = new QuotaManager({
       logger: this.log,
-      documentOperations: this.documentOps,
+      adminOperations: this.adminOps,
       postHogService: this.postHog
     });
 
