@@ -12,7 +12,7 @@ class ExploreService {
       const { limit = 10, offset = 0 } = filters;
       log(`[${requestId}] Starting getSwipeCards for user: ${requestingUser.$id} with filters: limit=${limit}, offset=${offset}`);
 
-  const appwriteService = AppwriteService.getInstance();
+      const appwriteService = AppwriteService.getInstance();
       // User preferences
       const showMeMinAge = requestingUser?.prefs?.showMeMinAge ?? 18;
       const showMeMaxAge = requestingUser?.prefs?.showMeMaxAge ?? 99;
@@ -204,31 +204,27 @@ class ExploreService {
       );
       const cardsQueryDuration = Date.now() - cardsQueryStart;
 
-      // Her doküman için photosWithUrl alanı ekle
-      const enrichedDocuments = documents.documents.map((doc) => {
-        const photoKeys = doc.photos || []; // 'photos' dizisi varsa
-        const photosWithUrl = generatePhotoUrls(photoKeys);
-        return {
-          ...doc,
-          photosWithUrl
-        };
-      });
+      // Sadece gerekli verileri çek ve enrich et
+      const enrichmentStart = Date.now();
+      const enrichedCards = await this.enrichSwipeCards(
+        jwtToken,
+        documents.documents,
+        requestId,
+        log
+      );
+      const enrichmentDuration = Date.now() - enrichmentStart;
 
-
-      const totalOperationDuration = Date.now() - operationStart;
-
-      log(`[${requestId}] Cards query completed in ${cardsQueryDuration}ms`);
-      log(`[${requestId}] Found ${documents.total} potential cards`);
-      log(`[${requestId}] getSwipeCards completed in ${totalOperationDuration}ms`);
+      log(`[${requestId}] Cards enrichment completed in ${enrichmentDuration}ms`);
 
       return {
-        cards: enrichedDocuments,
+        cards: enrichedCards,
         total: documents.total,
         exclusionsSummary: exclusionSummary,
         performance: {
           exclusionQueryDuration,
           cardsQueryDuration,
-          totalOperationDuration,
+          enrichmentDuration,
+          totalOperationDuration: Date.now() - operationStart,
           queriesExecuted: queryNames
         }
       };
@@ -239,6 +235,97 @@ class ExploreService {
     }
   }
 
+
+  async enrichSwipeCards(jwtToken, profileDocuments, requestId, log) {
+    try {
+      const profileIds = profileDocuments.map(doc => doc.$id);
+
+      // Sadece swipe cards için gerekli verileri paralel çek
+      const [mediaData, preferencesData] = await Promise.all([
+        this.getBatchProfileMedia(jwtToken, profileIds),
+        this.getBatchProfilePreferences(jwtToken, profileIds)
+      ]);
+
+      log(`[${requestId}] Essential data fetched for ${profileIds.length} profiles`);
+
+      // Data'yı organize et
+      const mediaByUserId = this.groupDocumentsByUserId(mediaData);
+      const preferencesByUserId = this.groupSingleDocumentsByUserId(preferencesData);
+
+      // Her profile'ı enrich et
+      const enrichedCards = profileDocuments.map(profile => {
+        const userId = profile.$id;
+
+        // Photo URLs generate et
+        const photoKeys = profile.photos || [];
+        const photosWithUrl = generatePhotoUrls(photoKeys);
+
+        // Sadece gerekli data'yı attach et
+        return {
+          ...profile,
+          photosWithUrl,
+          medias: mediaByUserId[userId] || [],
+          preferences: preferencesByUserId[userId] || null
+        };
+      });
+
+      return enrichedCards;
+
+    } catch (error) {
+      log(`[${requestId}] ERROR in enrichSwipeCards: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getBatchProfileMedia(jwtToken, userIds) {
+    if (userIds.length === 0) return [];
+
+    const appwriteService = AppwriteService.getInstance();
+    const result = await appwriteService.listDocuments(
+      jwtToken,
+      process.env.DB_COLLECTION_PROFILE_MEDIA_ID,
+      [
+        Query.equal('userId', userIds),
+        Query.equal('isActive', true),
+        Query.orderAsc('displayOrder')
+      ]
+    );
+    return result.documents;
+  }
+
+  async getBatchProfilePreferences(jwtToken, userIds) {
+    if (userIds.length === 0) return [];
+
+    const appwriteService = AppwriteService.getInstance();
+    const result = await appwriteService.listDocuments(
+      jwtToken,
+      process.env.DB_COLLECTION_PROFILE_PREFERENCES_ID,
+      [
+        Query.equal('userId', userIds),
+        Query.limit(userIds.length)
+      ]
+    );
+    return result.documents;
+  }
+
+  groupDocumentsByUserId(documents) {
+    return documents.reduce((acc, doc) => {
+      const userId = doc.userId;
+      if (!acc[userId]) {
+        acc[userId] = [];
+      }
+      acc[userId].push(doc);
+      return acc;
+    }, {});
+  }
+
+  groupSingleDocumentsByUserId(documents) {
+    return documents.reduce((acc, doc) => {
+      const userId = doc.userId;
+      acc[userId] = doc;
+      return acc;
+    }, {});
+  }
 }
 
 export default new ExploreService();

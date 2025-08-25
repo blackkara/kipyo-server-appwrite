@@ -10,7 +10,6 @@ import { readFileSync } from 'fs';
 import { ERROR_CODES, AppError } from '../../utils/errorConstants.js';
 import { generatePhotoUrl, generatePhotoUrls } from '../../utils/photoUtils.js';
 
-import TimezoneValidationTool from '../../utils/TimezoneValidationTool.js';
 import ProfileUtils from './utils/ProfileUtils.js';
 
 import path from 'path';
@@ -19,7 +18,105 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const { createQuery } = AppwriteService;
+const Query = createQuery();
+
 class ProfileService {
+
+  async createProfile(jwtToken, userId, username, email, birthDate, createDate, gender, countryCode, timezoneOffset, requestId, log) {
+    try {
+      const operationStart = Date.now();
+      log(`[${requestId}] Starting createProfile for user: ${userId}`);
+
+      const appwriteService = AppwriteService.getInstance();
+
+      // Check if profile already exists
+      try {
+        const existingProfile = await appwriteService.getDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_PROFILES_ID,
+          userId
+        );
+
+        if (existingProfile) {
+          throw new AppError(ERROR_CODES.PROFILE_ALREADY_EXISTS, 'Profile already exists for this user');
+        }
+      } catch (dbError) {
+        // If document not found, that's what we want - continue with creation
+        if (dbError.type !== 'document_not_found') {
+          throw new AppError(ERROR_CODES.DATABASE_OPERATION_FAILED, dbError.message, dbError);
+        }
+      }
+
+      const profileData = await this.createFullProfile(jwtToken, userId, username, email, birthDate, createDate, gender, countryCode, timezoneOffset);
+
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] Profile created successfully in ${operationDuration}ms`);
+
+      return profileData;
+
+    } catch (error) {
+      log(`[${requestId}] ERROR in createProfile: ${error.message}`);
+
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      throw new AppError(ERROR_CODES.PROFILE_CREATION_FAILED, error.message, error);
+    }
+  }
+
+  async getProfile(jwtToken, userId, requestId, log, requestedTimezone = null) {
+    try {
+      const operationStart = Date.now();
+      log(`[${requestId}] Starting getProfile for user: ${userId}`);
+
+      const appwriteService = AppwriteService.getInstance();
+
+      //const fullProfile = await this.getFullProfile(userId);
+
+      // Get profile document
+      let profile;
+      try {
+        profile = await this.getFullProfile(jwtToken, userId);
+      } catch (dbError) {
+        if (dbError instanceof AppError) {
+          throw dbError;
+        }
+        if (dbError.type === 'document_not_found') {
+          throw new AppError(ERROR_CODES.PROFILE_NOT_FOUND, 'Profile not found');
+        }
+        throw new AppError(ERROR_CODES.DATABASE_OPERATION_FAILED, dbError.message, dbError);
+      }
+
+      log(`[${requestId}] Profile found for user: ${userId}`);
+      // ===========================================
+      // TIMEZONE VE RESET KONTROLÜ (YENİ)
+      // ===========================================
+      //const timeZoneUpdateResult = await appwriteService.quotaManager.updateUserTimezone(jwtToken, userId, requestedTimezone);
+      log(`[${requestId}] GetProfile pre validation - Remaining direct messages: ${profile.dailyDirectMessageRemaining}`);
+
+      const profileCompletionStats = ProfileUtils.getProfileCompletionDetails(profile);
+      Object.assign(profile, { profileCompletionStats: profileCompletionStats });
+
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] Profile retrieved successfully in ${operationDuration}ms`);
+
+      const quotas = await appwriteService.quotaManager.getAllQuotaStatuses(jwtToken, userId);
+      Object.assign(profile, { quotaStatus: quotas });
+
+      return profile;
+    } catch (error) {
+      log(`[${requestId}] ERROR in getProfile: ${error.message}`);
+
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      throw new AppError(ERROR_CODES.PROCESSING_ERROR, error.message, error);
+    }
+  }
+
 
   isInappropriate(values) {
     for (let index = 0; index < values.length; index++) {
@@ -116,18 +213,22 @@ class ProfileService {
     }
   }
 
-  async uploadPhoto(jwtToken, userId, imageBase64, requestId, log) {
+  getPhotoValidationConfig() {
+    return {
+      maxSizeInBytes: 10 * 1024 * 1024, // 10MB limit
+      maxSizeMB: 10,
+      allowedFormats: ['image/jpeg'],
+      requiredValidations: ['sizeValid', 'formatValid', 'hasFace', 'appropriate']
+    };
+  }
+
+  async uploadPhotoOld(jwtToken, userId, imageBase64, requestId, log) {
     try {
       const operationStart = Date.now();
       log(`[${requestId}] Starting uploadPhoto for user: ${userId}`);
 
       // Configuration
-      const config = {
-        maxSizeInBytes: 10 * 1024 * 1024, // 10MB limit
-        maxSizeMB: 10,
-        allowedFormats: ['image/jpeg'],
-        requiredValidations: ['sizeValid', 'formatValid', 'hasFace', 'appropriate']
-      };
+      const config = this.getPhotoValidationConfig();
 
       const result = {
         success: false,
@@ -153,7 +254,7 @@ class ProfileService {
 
       // Image size validation (base64 check)
       const imageSizeInBytes = (imageBase64.length * 3) / 4;
-      const maxSizeInBytes = 10 * 1024 * 1024; // 10MB limit
+      const maxSizeInBytes = config.maxSizeInBytes;
 
       if (imageSizeInBytes > maxSizeInBytes) {
         result.errors.push({
@@ -334,21 +435,35 @@ class ProfileService {
 
       // Update profile with new photo
       try {
-        const appwriteService = AppwriteService.getInstance();
-        const updatedPhotos = [...(profile.photos || []), key];
 
-        await appwriteService.updateDocument(
+        const newMedia = await this.addProfileMedia(
           jwtToken,
-          process.env.DB_COLLECTION_PROFILES_ID,
           userId,
-          { photos: updatedPhotos }
+          profile.$id,
+          'PHOTO',
+          this.generatePhotoUrl(key),
+          this.generatePhotoUrl(key)
         );
+
 
         result.success = true;
         result.photoKey = key;
         result.photoUrl = this.generatePhotoUrl(key);
-        result.totalPhotos = updatedPhotos.length;
+        result.totalPhotos = (await this.getUserMediaWithOrder(jwtToken, userId)).length;
         result.operationDuration = Date.now() - operationStart;
+
+        result.newMedia = {
+          id: newMedia.$id,
+          userId: newMedia.userId,
+          mediaType: newMedia.mediaType,
+          url: newMedia.url,
+          displayOrder: newMedia.displayOrder,
+          isActive: newMedia.isActive,
+          thumbnailUrl: newMedia.thumbnailUrl,
+          createdAt: newMedia.$createdAt,
+          updatedAt: newMedia.$updatedAt
+        };
+
 
         log(`[${requestId}] Photo upload completed successfully in ${result.operationDuration}ms`);
         return result;
@@ -391,66 +506,10 @@ class ProfileService {
     }
   }
 
-  async uploadPhoto2(jwtToken, userId, imageBase64, requestId, log) {
+  async deletePhoto(jwtToken, userId, photoKey, requestId, log) {
     try {
       const operationStart = Date.now();
-      log(`[${requestId}] Starting uploadPhoto for user: ${userId}`);
-
-      // Image size validation (base64 check)
-      const imageSizeInBytes = (imageBase64.length * 3) / 4; // Approximate base64 to bytes conversion
-      const maxSizeInBytes = 10 * 1024 * 1024; // 10MB limit
-
-      if (imageSizeInBytes > maxSizeInBytes) {
-        throw new AppError(ERROR_CODES.IMAGE_TOO_LARGE,
-          `Image size (${Math.round(imageSizeInBytes / 1024 / 1024)}MB) exceeds maximum allowed size (10MB)`);
-      }
-
-      log(`[${requestId}] Image size validation passed: ${Math.round(imageSizeInBytes / 1024)}KB`);
-
-      // Convert base64 to buffer and validate image format
-      const imageBuffer = Buffer.from(imageBase64, 'base64');
-      const fileInfo = await fileTypeFromBuffer(imageBuffer);
-
-      if (!fileInfo || fileInfo.mime !== 'image/jpeg') {
-        throw new AppError(ERROR_CODES.IMAGE_FORMAT_INVALID, 'Only JPEG images are allowed');
-      }
-
-      log(`[${requestId}] Image format validation passed`);
-
-      // Initialize Google Vision API
-      const credentialsPath = join(__dirname, './googleAuth.json');
-      const credentials = JSON.parse(readFileSync(credentialsPath, 'utf8'));
-      const auth = new GoogleAuth({ credentials });
-      const imageAnnotatorClient = new ImageAnnotatorClient({ auth });
-
-      // Face detection
-      try {
-        const [faceDetectionResult] = await imageAnnotatorClient.faceDetection(imageBuffer);
-        const hasFace = faceDetectionResult.faceAnnotations.length > 0;
-
-        if (!hasFace) {
-          throw new AppError(ERROR_CODES.IMAGE_NO_FACE_DETECTED, 'Image must contain at least one face');
-        }
-
-        log(`[${requestId}] Face detection passed`);
-
-        // Safe search detection
-        const [safeSearchDetectionResult] = await imageAnnotatorClient.safeSearchDetection(imageBuffer);
-        const { adult, medical, spoof, violence } = safeSearchDetectionResult.safeSearchAnnotation;
-        const inappropriate = this.isInappropriate([adult, medical, spoof, violence]);
-
-        if (inappropriate) {
-          throw new AppError(ERROR_CODES.IMAGE_INAPPROPRIATE_CONTENT, 'Image contains inappropriate content');
-        }
-
-        log(`[${requestId}] Safe search detection passed`);
-      } catch (visionError) {
-        if (visionError instanceof AppError) {
-          throw visionError;
-        }
-        throw new AppError(ERROR_CODES.GOOGLE_VISION_API_ERROR, visionError.message, visionError);
-      }
-
+      log(`[${requestId}] Starting deletePhoto for user: ${userId}, photoKey: ${photoKey}`);
       const appwriteService = AppwriteService.getInstance();
 
       // Get current profile to check existing photos
@@ -474,10 +533,20 @@ class ProfileService {
 
       log(`[${requestId}] Profile found, current photos count: ${profile.photos ? profile.photos.length : 0}`);
 
-      // Generate unique key for the photo
-      const key = randomBytes(18).toString('hex').toUpperCase();
+      // Get current media with order information
+      const currentPhotos = await this.getUserMediaWithOrder(jwtToken, userId);
 
-      // Upload to S3/DigitalOcean Spaces
+      // Find the media record to delete by photoKey ($id)
+      const mediaToDelete = currentPhotos.find(media => media.$id === photoKey);
+
+      // Check if photo exists in user's media
+      if (!mediaToDelete) {
+        throw new AppError(ERROR_CODES.PHOTO_NOT_FOUND, 'Photo not found in user profile');
+      }
+
+      log(`[${requestId}] Photo found in user profile media table`);
+
+      // Delete from S3/DigitalOcean Spaces
       try {
         const spaces = new S3Client({
           endpoint: process.env.SPACES_ENDPOINT,
@@ -489,41 +558,34 @@ class ProfileService {
           forcePathStyle: false,
         });
 
-        const uploadCommand = new PutObjectCommand({
+        const deleteCommand = new DeleteObjectCommand({
           Bucket: process.env.SPACES_BUCKET,
-          Key: key,
-          Body: imageBuffer,
-          ACL: 'public-read',
-          ContentType: 'image/jpeg'
+          Key: photoKey,
         });
 
-        await spaces.send(uploadCommand);
-        log(`[${requestId}] Photo uploaded to S3 with key: ${key}`);
+        await spaces.send(deleteCommand);
+        log(`[${requestId}] Photo deleted from S3 with key: ${photoKey}`);
       } catch (s3Error) {
-        throw new AppError(ERROR_CODES.S3_UPLOAD_ERROR, s3Error.message, s3Error);
+        throw new AppError(ERROR_CODES.S3_DELETE_ERROR, s3Error.message, s3Error);
       }
 
-      // Update profile with new photo
+      // Delete from profile media table and update orders
       try {
-        const updatedPhotos = [...(profile.photos || []), key];
+        await this.deleteProfileMedia(jwtToken, userId, mediaToDelete.$id);
+        log(`[${requestId}] Photo deleted from profile media table and orders updated`);
 
-        const updatedProfile = await appwriteService.updateDocument(
-          jwtToken,
-          process.env.DB_COLLECTION_PROFILES_ID,
-          userId,
-          { photos: updatedPhotos }
-        );
+        // Get remaining media after deletion
+        const remainingMedia = await this.getUserMediaWithOrder(jwtToken, userId);
+        const remainingPhotoKeys = remainingMedia.map(media => media.$id);
 
         const operationDuration = Date.now() - operationStart;
-        log(`[${requestId}] Photo upload completed successfully in ${operationDuration}ms`);
+        log(`[${requestId}] Photo deletion completed successfully in ${operationDuration}ms`);
 
         return {
-          photoKey: key,
-          photoUrl: this.generatePhotoUrl(key),
-          totalPhotos: updatedPhotos.length,
-          hasFace: true,
-          inappropriate: false,
-          safetyDetails: { adult: 'UNLIKELY', medical: 'UNLIKELY', spoof: 'UNLIKELY', violence: 'UNLIKELY' },
+          deletedPhotoKey: photoKey,
+          deletedPhotoUrl: generatePhotoUrl(photoKey),
+          remainingPhotos: remainingPhotoKeys,
+          remainingPhotoUrls: generatePhotoUrls(remainingPhotoKeys),
           operationDuration
         };
       } catch (updateError) {
@@ -531,24 +593,22 @@ class ProfileService {
       }
 
     } catch (error) {
-      log(`[${requestId}] ERROR in uploadPhoto: ${error.message}`);
-
+      log(`[${requestId}] ERROR in deletePhoto: ${error.message}`);
       if (error instanceof AppError) {
         throw error;
       }
-
-      throw new AppError(ERROR_CODES.IMAGE_UPLOAD_FAILED, error.message, error);
+      throw new AppError(ERROR_CODES.IMAGE_DELETE_FAILED, error.message, error);
     }
-  } // Photo URL helper method
+  }
 
-  async deletePhoto(jwtToken, userId, photoKey, requestId, log) {
+  async deletePhotoOld(jwtToken, userId, photoKey, requestId, log) {
     try {
       const operationStart = Date.now();
       log(`[${requestId}] Starting deletePhoto for user: ${userId}, photoKey: ${photoKey}`);
 
       // Photo key validation
-      this.validatePhotoKey(photoKey);
-      log(`[${requestId}] Photo key validation passed`);
+      // this.validatePhotoKey(photoKey);
+      // log(`[${requestId}] Photo key validation passed`);
 
       const appwriteService = AppwriteService.getInstance();
 
@@ -572,10 +632,11 @@ class ProfileService {
       }
 
       log(`[${requestId}] Profile found, current photos count: ${profile.photos ? profile.photos.length : 0}`);
+      const currentPhotos = await this.getUserMediaWithOrder(jwtToken, userId);
+      const currentPhotoKeys = currentPhotos.map(p => p.$id);
 
       // Check if photo exists in user's photos
-      const currentPhotos = profile.photos || [];
-      if (!currentPhotos.includes(photoKey)) {
+      if (!currentPhotoKeys.includes(photoKey)) {
         throw new AppError(ERROR_CODES.PHOTO_NOT_FOUND, 'Photo not found in user profile');
       }
 
@@ -610,6 +671,8 @@ class ProfileService {
       try {
         const updatedPhotos = currentPhotos.filter(key => key !== photoKey);
 
+        await this.deleteProfileMedia(jwtToken, userId, photoKey);
+
         const updatedProfile = await appwriteService.updateDocument(
           jwtToken,
           process.env.DB_COLLECTION_PROFILES_ID,
@@ -633,14 +696,13 @@ class ProfileService {
 
     } catch (error) {
       log(`[${requestId}] ERROR in deletePhoto: ${error.message}`);
-
       if (error instanceof AppError) {
         throw error;
       }
-
       throw new AppError(ERROR_CODES.IMAGE_DELETE_FAILED, error.message, error);
     }
   }
+
   generatePhotoUrl(photoKey) {
     const baseUrl = process.env.SPACES_CDN_ENDPOINT || process.env.SPACES_ENDPOINT;
     const bucket = process.env.SPACES_BUCKET;
@@ -755,57 +817,6 @@ class ProfileService {
 
 
 
-  async getProfile(jwtToken, userId, requestId, log, requestedTimezone = null) {
-    try {
-      const operationStart = Date.now();
-      log(`[${requestId}] Starting getProfile for user: ${userId}`);
-
-      const appwriteService = AppwriteService.getInstance();
-
-      // Get profile document
-      let profile;
-      try {
-        profile = await appwriteService.getDocument(
-          jwtToken,
-          process.env.DB_COLLECTION_PROFILES_ID,
-          userId
-        );
-      } catch (dbError) {
-        if (dbError instanceof AppError) {
-          throw dbError;
-        }
-        if (dbError.type === 'document_not_found') {
-          throw new AppError(ERROR_CODES.PROFILE_NOT_FOUND, 'Profile not found');
-        }
-        throw new AppError(ERROR_CODES.DATABASE_OPERATION_FAILED, dbError.message, dbError);
-      }
-
-      log(`[${requestId}] Profile found for user: ${userId}`);
-      // ===========================================
-      // TIMEZONE VE RESET KONTROLÜ (YENİ)
-      // ===========================================
-      const timeZoneUpdateResult = await appwriteService.quotaManager.updateUserTimezone(jwtToken, userId, requestedTimezone);
-      log(`[${requestId}] GetProfile pre validation - Remaining direct messages: ${profile.dailyDirectMessageRemaining}`);
-      const profileCompletionStats = ProfileUtils.getProfileCompletionDetails(profile);
-      Object.assign(profile, { profileCompletionStats: profileCompletionStats });
-
-      const operationDuration = Date.now() - operationStart;
-      log(`[${requestId}] Profile retrieved successfully in ${operationDuration}ms`);
-
-      const quotas = await appwriteService.quotaManager.getAllQuotaStatuses(jwtToken, userId);
-      Object.assign(profile, { quotaStatus: quotas });
-
-      return profile;
-    } catch (error) {
-      log(`[${requestId}] ERROR in getProfile: ${error.message}`);
-
-      if (error instanceof AppError) {
-        throw error;
-      }
-
-      throw new AppError(ERROR_CODES.PROCESSING_ERROR, error.message, error);
-    }
-  }
 
 
   async useDirectMessageIfExists(jwtToken, userId, requestId, log, requestedTimezone = null) {
@@ -835,6 +846,785 @@ class ProfileService {
     } catch (error) {
       log(`[${requestId}] ERROR in useDirectMessageIfExists: ${error.message}`);
       throw error;
+    }
+  }
+
+
+  // getProfileMedia(profile.userId),
+  // getProfilePreferences(profile.userId), 
+  // getProfileQuotas(profile.userId),
+  // getProfileModeration(profile.userId),
+  // getProfileTimezone(profile.userId)
+
+  async getFullProfile(jwtToken, userId) {
+    const [profile, medias, preferences, quotas, moderation, timezone] = await Promise.all([
+      this.getProfileData(jwtToken, userId),
+      this.getProfileMedia(jwtToken, userId),
+      this.getProfilePreferences(jwtToken, userId),
+      this.getProfileQuotas(jwtToken, userId),
+      this.getProfileModeration(jwtToken, userId),
+      this.getProfileTimezoneTracking(jwtToken, userId)
+    ]);
+
+    return Object.assign(profile, {
+      medias,
+      preferences,
+      quotas,
+      moderation,
+      timezoneTracking: timezone
+    });
+  }
+
+
+  async createFullProfile(jwtToken, userId, username, email, birthDate, createDate, gender, countryCode, timezoneOffset) {
+    const profileData = await this.createProfileData(jwtToken, userId, username, email, birthDate, createDate, gender, countryCode);
+
+    const [profileTimezoneTracking, profileQuotaDirectMessage, profileQuotaTranslate] = await Promise.all([
+      this.createProfileTimezoneTracking(jwtToken, userId, timezoneOffset, profileData.$id), // ✅
+      this.createProfileQuota(jwtToken, userId, 'DIRECT_MESSAGE', 5, 5, profileData.$id), // ✅
+      this.createProfileQuota(jwtToken, userId, 'TRANSLATE', 5, 5, profileData.$id) // ✅
+    ]);
+
+    return Object.assign(profileData, {
+      quotas: [profileQuotaDirectMessage, profileQuotaTranslate],
+      timezoneTracking: profileTimezoneTracking
+    });
+  }
+
+  async createProfileData(jwtToken, userId, username, email, birthDate, createDate, gender, countryCode) {
+    const appwriteService = AppwriteService.getInstance();
+    return appwriteService.createDocumentWithAdminPrivileges(
+      jwtToken,
+      userId,
+      process.env.DB_COLLECTION_PROFILES_ID,
+      userId,
+      { userId, username, email, birthDate, createDate, gender, countryCode },
+      [
+        { userId: userId, permissions: ['write', 'read', 'delete'] }
+      ]
+    );
+  }
+
+  async createProfileTimezoneTracking(jwtToken, userId, timezoneOffset, profileId) {
+    const appwriteService = AppwriteService.getInstance();
+    return appwriteService.createDocumentWithAdminPrivileges(
+      jwtToken,
+      userId,
+      process.env.DB_COLLECTION_PROFILE_TIMEZONE_TRACKING_ID,
+      'unique()',
+      { userId, timezoneOffset, profileRef: profileId },
+      [
+        { userId: userId, permissions: ['write', 'read', 'delete'] }
+      ]
+    );
+  }
+
+  async createProfileQuota(jwtToken, userId, quotaType, remainingCount, dailyLimit, profileId) {
+    const appwriteService = AppwriteService.getInstance();
+    return appwriteService.createDocumentWithAdminPrivileges(
+      jwtToken,
+      userId,
+      process.env.DB_COLLECTION_PROFILE_QUOTAS_ID,
+      'unique()',
+      { userId, quotaType, remainingCount, dailyLimit, profileRef: profileId }, // ✅ profileId kullan
+      [
+        { userId: userId, permissions: ['write', 'read', 'delete'] }
+      ]
+    );
+  }
+
+  async getProfileData(jwtToken, userId) {
+    const appwriteService = AppwriteService.getInstance();
+    return appwriteService.getDocument(
+      jwtToken,
+      process.env.DB_COLLECTION_PROFILES_ID,
+      userId
+    );
+  }
+  async getProfileMedia(jwtToken, userId) {
+    const appwriteService = AppwriteService.getInstance();
+    const media = await appwriteService.listDocuments(
+      jwtToken,
+      process.env.DB_COLLECTION_PROFILE_MEDIA_ID,
+      [
+        Query.equal('userId', userId),
+      ]
+    );
+    return media.documents;
+  }
+  async getProfilePreferences(jwtToken, userId) {
+    const appwriteService = AppwriteService.getInstance();
+    const preferences = await appwriteService.listDocuments(
+      jwtToken,
+      process.env.DB_COLLECTION_PROFILE_PREFERENCES_ID,
+      [
+        Query.equal('userId', userId),
+      ]
+    );
+    return preferences.documents.length > 0 ? preferences.documents[0] : null;
+  }
+
+  async getProfileQuotas(jwtToken, userId) {
+    const appwriteService = AppwriteService.getInstance();
+    const quotas = await appwriteService.listDocuments(
+      jwtToken,
+      process.env.DB_COLLECTION_PROFILE_QUOTAS_ID,
+      [
+        Query.equal('userId', userId),
+      ]
+    );
+    return quotas.documents;
+  }
+
+  async getProfileModeration(jwtToken, userId) {
+    const appwriteService = AppwriteService.getInstance();
+    const moderation = await appwriteService.listDocuments(
+      jwtToken,
+      process.env.DB_COLLECTION_PROFILE_MODERATION_ID,
+      [
+        Query.equal('userId', userId),
+      ]
+    );
+    return moderation.documents.length > 0 ? moderation.documents[0] : null;
+  }
+
+  async getProfileTimezoneTracking(jwtToken, userId) {
+    const appwriteService = AppwriteService.getInstance();
+    const timezone = await appwriteService.listDocuments(
+      jwtToken,
+      process.env.DB_COLLECTION_PROFILE_TIMEZONE_TRACKING_ID,
+      [
+        Query.equal('userId', userId),
+      ]
+    );
+    return timezone.documents.length > 0 ? timezone.documents[0] : null;
+  }
+
+  async getUserMediaWithOrder(jwtToken, userId) {
+    const appwriteService = AppwriteService.getInstance();
+    try {
+      const media = await appwriteService.listDocuments(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILE_MEDIA_ID,
+        [
+          Query.equal('userId', userId),
+          Query.equal('isActive', true),
+          Query.orderAsc('displayOrder')
+        ]
+      );
+      return media.documents;
+    } catch (error) {
+      if (error.code === 401) {
+        return []; // Yetki yoksa boş döndür
+      }
+      throw error;
+    }
+  }
+
+  async getNextAvailableOrder(jwtToken, userId) {
+    const existingMedia = await this.getUserMediaWithOrder(jwtToken, userId);
+
+    if (existingMedia.length === 0) {
+      return 1;
+    }
+
+    const maxOrder = Math.max(...existingMedia.map(m => m.displayOrder));
+    return maxOrder + 1;
+  }
+  async addProfileMedia(jwtToken, userId, profileId, mediaType, url, thumbnailUrl = null) {
+    const existingMedia = await this.getUserMediaWithOrder(userId, jwtToken);
+
+    if (existingMedia.length >= 10) {
+      throw new Error('Maksimum 10 fotoğraf ekleyebilirsiniz');
+    }
+
+    const displayOrder = await this.getNextAvailableOrder(jwtToken, userId);
+    const appwriteService = AppwriteService.getInstance();
+    return appwriteService.createDocumentWithAdminPrivileges(
+      jwtToken,
+      userId,
+      process.env.DB_COLLECTION_PROFILE_MEDIA_ID,
+      'unique()',
+      {
+        userId,
+        mediaType,
+        url,
+        displayOrder,
+        isActive: true,
+        thumbnailUrl,
+        profileRef: profileId
+      }, [
+      { userId: userId, permissions: ['write', 'read', 'delete'] }
+    ]
+    );
+  }
+  async deleteProfileMedia(jwtToken, userId, mediaId) {
+    const appwriteService = AppwriteService.getInstance();
+    try {
+      // 1. Silinecek media'yı bul
+      const mediaToDelete = await appwriteService.getDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILE_MEDIA_ID,
+        mediaId
+      );
+
+      if (!mediaToDelete || mediaToDelete.userId !== userId) {
+        throw new Error('Media bulunamadı veya yetkiniz yok');
+      }
+
+      const deletedOrder = mediaToDelete.displayOrder;
+
+      // 2. Media'yı tamamen sil (hard delete)
+      await appwriteService.deleteDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILE_MEDIA_ID,
+        mediaId
+      );
+
+      // 3. Silinen media'dan sonraki tüm media'ları bul ve order'larını güncelle
+      const remainingMedia = await appwriteService.listDocuments(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILE_MEDIA_ID,
+        [
+          Query.equal('userId', userId),
+          Query.equal('isActive', true),
+          Query.greaterThan('displayOrder', deletedOrder),
+          Query.orderAsc('displayOrder')
+        ]
+      );
+
+      // 4. Batch update ile order'ları yeniden düzenle
+      const updatePromises = remainingMedia.documents.map(media =>
+        appwriteService.updateDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_PROFILE_MEDIA_ID,
+          media.$id,
+          {
+            displayOrder: media.displayOrder - 1
+          }
+        )
+      );
+
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('Delete profile media error:', error);
+      throw error;
+    }
+  }
+
+
+  // profileService.js'e eklenecek yeni metodlar
+
+  async updateSpecificField(jwtToken, userId, fieldName, fieldValue, requestId, log) {
+    try {
+      const operationStart = Date.now();
+      log(`[${requestId}] Starting update for field: ${fieldName}`);
+
+      const appwriteService = AppwriteService.getInstance();
+
+      const updateData = { [fieldName]: fieldValue };
+
+      const updatedProfile = await appwriteService.updateDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILES_ID,
+        userId,
+        updateData
+      );
+
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] Field ${fieldName} updated successfully in ${operationDuration}ms`);
+
+      return {
+        profileId: updatedProfile.$id,
+        updatedField: fieldName,
+        newValue: fieldValue,
+        operationDuration
+      };
+
+    } catch (error) {
+      log(`[${requestId}] ERROR in updateSpecificField: ${error.message}`);
+      throw new AppError(ERROR_CODES.PROFILE_UPDATE_FAILED, error.message, error);
+    }
+  }
+
+  async updateMultipleFields(jwtToken, userId, fields, requestId, log) {
+    try {
+      const operationStart = Date.now();
+      log(`[${requestId}] Starting update for fields: ${Object.keys(fields).join(', ')}`);
+
+      const appwriteService = AppwriteService.getInstance();
+
+      const updatedProfile = await appwriteService.updateDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILES_ID,
+        userId,
+        fields
+      );
+
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] Multiple fields updated successfully in ${operationDuration}ms`);
+
+      return {
+        profileId: updatedProfile.$id,
+        updatedFields: Object.keys(fields),
+        operationDuration
+      };
+
+    } catch (error) {
+      log(`[${requestId}] ERROR in updateMultipleFields: ${error.message}`);
+      throw new AppError(ERROR_CODES.PROFILE_UPDATE_FAILED, error.message, error);
+    }
+  }
+
+  async updatePassions(jwtToken, userId, passions, requestId, log) {
+    try {
+      const operationStart = Date.now();
+      log(`[${requestId}] Starting passions update`);
+
+      const appwriteService = AppwriteService.getInstance();
+
+      // Önce mevcut preferences'ı kontrol et
+      const preferences = await this.getProfilePreferences(jwtToken, userId);
+
+      if (preferences) {
+        // Preferences varsa güncelle
+        await appwriteService.updateDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_PROFILE_PREFERENCES_ID,
+          preferences.$id,
+          { passions: passions }
+        );
+      } else {
+        // Preferences yoksa oluştur
+        await appwriteService.createDocumentWithAdminPrivileges(
+          jwtToken,
+          userId,
+          process.env.DB_COLLECTION_PROFILE_PREFERENCES_ID,
+          'unique()',
+          {
+            userId,
+            passions: passions,
+            habits: [],
+            profileRef: userId
+          },
+          [{ userId: userId, permissions: ['write', 'read', 'delete'] }]
+        );
+      }
+
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] Passions updated successfully in ${operationDuration}ms`);
+
+      return {
+        userId,
+        passions,
+        operationDuration
+      };
+
+    } catch (error) {
+      log(`[${requestId}] ERROR in updatePassions: ${error.message}`);
+      throw new AppError(ERROR_CODES.PROFILE_UPDATE_FAILED, error.message, error);
+    }
+  }
+
+  async updateHabits(jwtToken, userId, habits, requestId, log) {
+    try {
+      const operationStart = Date.now();
+      log(`[${requestId}] Starting habits update`);
+
+      const appwriteService = AppwriteService.getInstance();
+
+      const preferences = await this.getProfilePreferences(jwtToken, userId);
+
+      if (preferences) {
+        await appwriteService.updateDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_PROFILE_PREFERENCES_ID,
+          preferences.$id,
+          { habits: habits }
+        );
+      } else {
+        await appwriteService.createDocumentWithAdminPrivileges(
+          jwtToken,
+          userId,
+          process.env.DB_COLLECTION_PROFILE_PREFERENCES_ID,
+          'unique()',
+          {
+            userId,
+            passions: [],
+            habits: habits,
+            profileRef: userId
+          },
+          [{ userId: userId, permissions: ['write', 'read', 'delete'] }]
+        );
+      }
+
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] Habits updated successfully in ${operationDuration}ms`);
+
+      return {
+        userId,
+        habits,
+        operationDuration
+      };
+
+    } catch (error) {
+      log(`[${requestId}] ERROR in updateHabits: ${error.message}`);
+      throw new AppError(ERROR_CODES.PROFILE_UPDATE_FAILED, error.message, error);
+    }
+  }
+
+
+
+  validateImageSize(imageBase64, config) {
+    const imageSizeInBytes = (imageBase64.length * 3) / 4;
+
+    if (imageSizeInBytes > config.maxSizeInBytes) {
+      return {
+        valid: false,
+        error: {
+          code: 'IMAGE_TOO_LARGE',
+          message: `Image size (${Math.round(imageSizeInBytes / 1024 / 1024)}MB) exceeds maximum allowed size (${config.maxSizeMB}MB)`
+        }
+      };
+    }
+
+    return {
+      valid: true,
+      sizeInKB: Math.round(imageSizeInBytes / 1024)
+    };
+  }
+
+  async validateImageFormat(imageBase64, config) {
+    try {
+      const imageBuffer = Buffer.from(imageBase64, 'base64');
+      const fileInfo = await fileTypeFromBuffer(imageBuffer);
+
+      if (!fileInfo || !config.allowedFormats.includes(fileInfo.mime)) {
+        return {
+          valid: false,
+          buffer: imageBuffer,
+          error: {
+            code: 'IMAGE_FORMAT_INVALID',
+            message: `Only ${config.allowedFormats.join(', ')} images are allowed`
+          }
+        };
+      }
+
+      return { valid: true, buffer: imageBuffer };
+    } catch (error) {
+      return {
+        valid: false,
+        error: {
+          code: 'IMAGE_PROCESSING_ERROR',
+          message: 'Failed to process image data'
+        }
+      };
+    }
+  }
+
+  // 2. Google Vision API helper metodları
+  async initializeVisionClient() {
+    try {
+      const credentialsPath = join(__dirname, './googleAuth.json');
+      const credentials = JSON.parse(readFileSync(credentialsPath, 'utf8'));
+      const auth = new GoogleAuth({ credentials });
+      return new ImageAnnotatorClient({ auth });
+    } catch (error) {
+      throw {
+        code: 'GOOGLE_VISION_AUTH_ERROR',
+        message: 'Failed to initialize Google Vision API'
+      };
+    }
+  }
+
+  async detectFaces(imageBuffer, visionClient) {
+    try {
+      const [result] = await visionClient.faceDetection(imageBuffer);
+      const hasFace = result.faceAnnotations.length > 0;
+
+      if (!hasFace) {
+        return {
+          hasFace: false,
+          error: {
+            code: 'IMAGE_NO_FACE_DETECTED',
+            message: 'Image must contain at least one face'
+          }
+        };
+      }
+
+      return { hasFace: true };
+    } catch (error) {
+      return {
+        hasFace: false,
+        error: {
+          code: 'FACE_DETECTION_ERROR', message: 'Failed to perform face detection'
+        }
+      };
+    }
+  }
+
+  async detectInappropriateContent(imageBuffer, visionClient) {
+    try {
+      const [result] = await visionClient.safeSearchDetection(imageBuffer);
+      const { adult, medical, spoof, violence } = result.safeSearchAnnotation;
+
+      const safetyDetails = { adult, medical, spoof, violence };
+      const inappropriate = this.isInappropriate([adult, medical, spoof, violence]);
+
+      if (inappropriate) {
+        return {
+          inappropriate: true,
+          safetyDetails,
+          error: {
+            code: 'IMAGE_INAPPROPRIATE_CONTENT',
+            message: 'Image contains inappropriate content'
+          }
+        };
+      }
+
+      return { inappropriate: false, safetyDetails };
+    } catch (error) {
+      return {
+        inappropriate: true,
+        safetyDetails: {
+          adult: 'UNKNOWN',
+          medical: 'UNKNOWN',
+          spoof: 'UNKNOWN',
+          violence: 'UNKNOWN'
+        },
+        error: {
+          code: 'SAFE_SEARCH_ERROR',
+          message: 'Failed to perform safety detection'
+        }
+      };
+    }
+  }
+
+
+  // 3. S3 Upload helper
+  async uploadToS3(imageBuffer, key) {
+    try {
+      const spaces = new S3Client({
+        endpoint: process.env.SPACES_ENDPOINT,
+        region: process.env.SPACES_AWS_REGION,
+        credentials: {
+          accessKeyId: process.env.SPACES_ACCESS_KEY_ID,
+          secretAccessKey: process.env.SPACES_SECRET_ACCESS_KEY,
+        },
+        forcePathStyle: false,
+      });
+
+      const uploadCommand = new PutObjectCommand({
+        Bucket: process.env.SPACES_BUCKET,
+        Key: key,
+        Body: imageBuffer,
+        ACL: 'public-read',
+        ContentType: 'image/jpeg'
+      });
+
+      await spaces.send(uploadCommand);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'S3_UPLOAD_ERROR',
+          message: 'Failed to upload image to storage'
+        }
+      };
+    }
+  }
+
+  formatMediaForResponse(media) {
+    return {
+      id: media.$id,
+      userId: media.userId,
+      mediaType: media.mediaType,
+      url: media.url,
+      displayOrder: media.displayOrder,
+      isActive: media.isActive,
+      thumbnailUrl: media.thumbnailUrl,
+      createdAt: media.$createdAt,
+      updatedAt: media.$updatedAt
+    };
+  }
+
+  initializeUploadResult(config) {
+    return {
+      success: false,
+      photoKey: null,
+      photoUrl: null,
+      totalPhotos: 0,
+      config,
+      validations: {
+        sizeValid: false,
+        formatValid: false,
+        hasFace: false,
+        inappropriate: true,
+        safetyDetails: {
+          adult: 'UNKNOWN',
+          medical: 'UNKNOWN',
+          spoof: 'UNKNOWN',
+          violence: 'UNKNOWN'
+        }
+      },
+      errors: [],
+      operationDuration: 0
+    };
+  }
+
+  allValidationsPassed(validations) {
+    return validations.sizeValid &&
+      validations.formatValid &&
+      validations.hasFace &&
+      !validations.inappropriate;
+  }
+
+  async getProfileForUpload(jwtToken, userId) {
+    try {
+      const appwriteService = AppwriteService.getInstance();
+      return await appwriteService.getDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILES_ID,
+        userId
+      );
+    } catch (error) {
+      return null;
+    }
+  }
+
+
+  // 4. Ana uploadPhoto metodu - yeniden düzenlenmiş
+  async uploadPhoto(jwtToken, userId, imageBase64, requestId, log) {
+    const operationStart = Date.now();
+    log(`[${requestId}] Starting uploadPhoto for user: ${userId}`);
+
+    const config = this.getPhotoValidationConfig();
+
+    // Initialize result object
+    const result = this.initializeUploadResult(config);
+
+    try {
+      // Step 1: Size validation
+      const sizeValidation = this.validateImageSize(imageBase64, config);
+      if (!sizeValidation.valid) {
+        result.errors.push(sizeValidation.error);
+        result.operationDuration = Date.now() - operationStart;
+        return result;
+      }
+      result.validations.sizeValid = true;
+      log(`[${requestId}] Image size validation passed: ${sizeValidation.sizeInKB}KB`);
+
+      // Step 2: Format validation and buffer conversion
+      const formatValidation = await this.validateImageFormat(imageBase64, config);
+      if (!formatValidation.valid) {
+        result.errors.push(formatValidation.error);
+        result.operationDuration = Date.now() - operationStart;
+        return result;
+      }
+      result.validations.formatValid = true;
+      const imageBuffer = formatValidation.buffer;
+      log(`[${requestId}] Image format validation passed`);
+
+      // Step 3: Initialize Vision API
+      let visionClient;
+      try {
+        visionClient = await this.initializeVisionClient();
+      } catch (error) {
+        result.errors.push(error);
+        result.operationDuration = Date.now() - operationStart;
+        return result;
+      }
+
+      // Step 4: Face detection
+      const faceDetection = await this.detectFaces(imageBuffer, visionClient);
+      result.validations.hasFace = faceDetection.hasFace;
+      if (!faceDetection.hasFace) {
+        result.errors.push(faceDetection.error);
+        log(`[${requestId}] Face detection failed`);
+      } else {
+        log(`[${requestId}] Face detection passed`);
+      }
+
+      // Step 5: Inappropriate content detection
+      const safetyCheck = await this.detectInappropriateContent(imageBuffer, visionClient);
+      result.validations.inappropriate = safetyCheck.inappropriate;
+      result.validations.safetyDetails = safetyCheck.safetyDetails;
+      if (safetyCheck.inappropriate) {
+        result.errors.push(safetyCheck.error);
+        log(`[${requestId}] Safe search detection failed`);
+      } else {
+        log(`[${requestId}] Safe search detection passed`);
+      }
+
+      // Step 6: Check if all validations passed
+      if (!this.allValidationsPassed(result.validations)) {
+        result.operationDuration = Date.now() - operationStart;
+        log(`[${requestId}] Upload skipped due to validation failures`);
+        return result;
+      }
+
+      // Step 7: Get profile
+      const profile = await this.getProfileForUpload(jwtToken, userId);
+      if (!profile) {
+        result.errors.push({
+          code: 'PROFILE_NOT_FOUND',
+          message: 'Profile not found'
+        });
+        result.operationDuration = Date.now() - operationStart;
+        return result;
+      }
+      log(`[${requestId}] Profile found`);
+
+      // Step 8: Generate key and upload to S3
+      const key = randomBytes(18).toString('hex').toLowerCase();
+      const uploadResult = await this.uploadToS3(imageBuffer, key);
+      if (!uploadResult.success) {
+        result.errors.push(uploadResult.error);
+        result.operationDuration = Date.now() - operationStart;
+        return result;
+      }
+      log(`[${requestId}] Photo uploaded to S3 with key: ${key}`);
+
+      // Step 9: Add to profile media
+      try {
+        const newMedia = await this.addProfileMedia(
+          jwtToken,
+          userId,
+          profile.$id,
+          'PHOTO',
+          this.generatePhotoUrl(key),
+          this.generatePhotoUrl(key)
+        );
+
+        // Prepare success result
+        result.success = true;
+        result.photoKey = key;
+        result.photoUrl = this.generatePhotoUrl(key);
+        result.totalPhotos = (await this.getUserMediaWithOrder(jwtToken, userId)).length;
+        result.newMedia = this.formatMediaForResponse(newMedia);
+        result.operationDuration = Date.now() - operationStart;
+
+        log(`[${requestId}] Photo upload completed successfully in ${result.operationDuration}ms`);
+        return result;
+
+      } catch (error) {
+        result.errors.push({
+          code: 'PROFILE_UPDATE_FAILED',
+          message: 'Failed to update user profile with new photo'
+        });
+        result.operationDuration = Date.now() - operationStart;
+        return result;
+      }
+
+    } catch (error) {
+      log(`[${requestId}] UNEXPECTED ERROR in uploadPhoto: ${error.message}`);
+      result.errors.push({
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred during photo upload'
+      });
+      result.operationDuration = Date.now() - operationStart;
+      return result;
     }
   }
 }

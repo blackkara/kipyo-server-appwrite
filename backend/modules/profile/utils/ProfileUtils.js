@@ -273,10 +273,10 @@ class ProfileUtils {
   }
 
   /**
- * Calculate profile completion percentage based on filled fields
- * @param {Object} profileData - Profile data object
- * @returns {number} Completion percentage (0-100)
- */
+   * Calculate profile completion percentage based on filled fields
+   * @param {Object} profileData - Profile data object
+   * @returns {number} Completion percentage (0-100)
+   */
   calculateProfileCompletion(profileData) {
     try {
       let completedRequired = 0;
@@ -386,20 +386,36 @@ class ProfileUtils {
   }
 
   /**
- * Check if a specific field is completed based on its category
- * @param {Object} profileData - Profile data object
- * @param {string} field - Field name to check
- * @param {string} category - Field category ('required', 'important', 'optional')
- * @returns {boolean} True if field is completed
- */
+   * Check if a specific field is completed based on its category
+   * @param {Object} profileData - Profile data object
+   * @param {string} field - Field name to check
+   * @param {string} category - Field category ('required', 'important', 'optional')
+   * @returns {boolean} True if field is completed
+   */
   _isFieldCompleted(profileData, field, category) {
     try {
       if (!profileData || typeof profileData !== 'object') {
         return false;
       }
 
-      // Get field value using nested property access
-      const value = this._getNestedProperty(profileData, field);
+      // Special handling for new data structure
+      let value;
+      
+      // Handle medias field (was photos)
+      if (field === 'medias' || field === 'photos') {
+        value = this._getNestedProperty(profileData, 'medias');
+      }
+      // Handle passions and habits in preferences
+      else if (field === 'passions') {
+        value = this._getNestedProperty(profileData, 'preferences.passions');
+      }
+      else if (field === 'habits') {
+        value = this._getNestedProperty(profileData, 'preferences.habits');
+      }
+      // Handle other fields normally
+      else {
+        value = this._getNestedProperty(profileData, field);
+      }
 
       // Check if value exists and is not empty
       if (value === null || value === undefined) {
@@ -423,6 +439,12 @@ class ProfileUtils {
         case 'object':
           if (Array.isArray(value)) {
             // Array is completed if it has at least one element
+            // For medias array, also check if medias are active
+            if (field === 'medias' || field === 'photos') {
+              return value.length > 0 && value.some(media => 
+                media && (media.isActive !== false) && media.url
+              );
+            }
             return value.length > 0;
           } else {
             // Object is completed if it has at least one property
@@ -443,7 +465,7 @@ class ProfileUtils {
   /**
    * Get nested property value from an object using dot notation
    * @param {Object} obj - Source object
-   * @param {string} path - Property path (e.g., 'user.profile.name' or 'preferences.theme')
+   * @param {string} path - Property path (e.g., 'user.profile.name' or 'preferences.passions')
    * @returns {*} Property value or null if not found
    */
   _getNestedProperty(obj, path) {
