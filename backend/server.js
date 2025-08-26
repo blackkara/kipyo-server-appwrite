@@ -9,7 +9,6 @@ import exploreRoutes from './modules/explore/exploreRoutes.js';
 import profileRoutes from './modules/profile/profileRoutes.js';
 
 import translateRouter from './api/translate/TranslateEndpoint.js';
-import visionRouter from './api/vision/ImageAnalysisEndpoint.js';
 import directMessageRouter from './api/directmessage/DirectMessageEndpoint.js';
 import accountRouter from './api/account/AccountDeletionEndpoint.js';
 import publicAccountRouter from './api/account/PublicAccountDeletionEndpoint.js';
@@ -17,17 +16,6 @@ import publicAccountRouter from './api/account/PublicAccountDeletionEndpoint.js'
 import { ERROR_CODES, AppError, ErrorHandler } from './utils/errorConstants.js'
 
 import authenticateUser from './middleware/authenticateUser.js';
-
-import AppwriteService from './services/appwrite/AppwriteService.js';
-const appwriteService = AppwriteService.getInstance();
-
-
-
-
-// setInterval(() => {
-//   const cacheStats = appwriteService.getCacheStats();
-//   console.log('Connection Cache:', cacheStats);
-// }, 5000); // 5 seconds
 
 
 import { initializeApp, cert } from 'firebase-admin/app';
@@ -127,6 +115,8 @@ app.use('/api/directmessage', directMessageRouter);
 // Account Management API (Authenticated)
 app.use('/api/account', accountRouter);
 
+
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
@@ -146,6 +136,8 @@ app.get('/', (req, res) => {
     }
   });
 });
+
+
 
 // Health check endpoint
 app.get('/health', (req, res) => {

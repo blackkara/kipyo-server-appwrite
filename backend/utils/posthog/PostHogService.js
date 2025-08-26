@@ -187,23 +187,36 @@ class PostHogService {
       // User bilgisi varsa distinctive_id olarak kullan
       const distinctId = context.userId || context.requestId || 'anonymous';
 
-      await this.client.capture({
-        distinctId,
-        event: 'appwrite_error',
-        properties
+      // PostHog capture'ı timeout ile sınırla ve hataları yakala
+      await Promise.race([
+        this.client.capture({
+          distinctId,
+          event: 'appwrite_error',
+          properties
+        }),
+        new Promise((resolve) => setTimeout(resolve, 5000)) // 5 saniye timeout
+      ]).catch(err => {
+        console.error('[PostHog] Error tracking failed (non-blocking):', err.message || err);
       });
 
       // Kritik hataları ayrıca feature flag ile işaretle
       if (errorCategory.severity === 'critical') {
-        await this.client.capture({
-          distinctId,
-          event: 'critical_appwrite_error',
-          properties
+        await Promise.race([
+          this.client.capture({
+            distinctId,
+            event: 'critical_appwrite_error',
+            properties
+          }),
+          new Promise((resolve) => setTimeout(resolve, 5000))
+        ]).catch(err => {
+          console.error('[PostHog] Critical error tracking failed (non-blocking):', err.message || err);
         });
       }
 
     } catch (trackingError) {
-      console.error('PostHog error tracking failed:', trackingError);
+      // Bu catch bloğu sadece backup, normalde üstteki catch'ler çalışacak
+      console.error('[PostHog] Unexpected error in trackError (non-blocking):', trackingError.message || trackingError);
+      // Hata olsa bile işlemi durdurmuyoruz
     }
   }
 
@@ -228,23 +241,35 @@ class PostHogService {
 
       const distinctId = context.userId || context.requestId || 'anonymous';
 
-      await this.client.capture({
-        distinctId,
-        event: 'appwrite_performance',
-        properties
+      // PostHog capture'ı timeout ile sınırla ve hataları yakala
+      await Promise.race([
+        this.client.capture({
+          distinctId,
+          event: 'appwrite_performance',
+          properties
+        }),
+        new Promise((resolve) => setTimeout(resolve, 5000))
+      ]).catch(err => {
+        console.error('[PostHog] Performance tracking failed (non-blocking):', err.message || err);
       });
 
       // Yavaş işlemleri ayrıca işaretle (>5 saniye)
       if (duration > 5000) {
-        await this.client.capture({
-          distinctId,
-          event: 'slow_appwrite_operation',
-          properties
+        await Promise.race([
+          this.client.capture({
+            distinctId,
+            event: 'slow_appwrite_operation',
+            properties
+          }),
+          new Promise((resolve) => setTimeout(resolve, 5000))
+        ]).catch(err => {
+          console.error('[PostHog] Slow operation tracking failed (non-blocking):', err.message || err);
         });
       }
 
     } catch (trackingError) {
-      console.error('PostHog performance tracking failed:', trackingError);
+      console.error('[PostHog] Unexpected error in trackPerformance (non-blocking):', trackingError.message || trackingError);
+      // Hata olsa bile işlemi durdurmuyoruz
     }
   }
 
@@ -263,14 +288,21 @@ class PostHogService {
 
       const distinctId = userId || 'anonymous';
 
-      await this.client.capture({
-        distinctId,
-        event: eventName,
-        properties: enhancedProperties
+      // PostHog capture'ı timeout ile sınırla ve hataları yakala
+      await Promise.race([
+        this.client.capture({
+          distinctId,
+          event: eventName,
+          properties: enhancedProperties
+        }),
+        new Promise((resolve) => setTimeout(resolve, 5000))
+      ]).catch(err => {
+        console.error(`[PostHog] Business event '${eventName}' tracking failed (non-blocking):`, err.message || err);
       });
 
     } catch (trackingError) {
-      console.error('PostHog business event tracking failed:', trackingError);
+      console.error(`[PostHog] Unexpected error tracking '${eventName}' (non-blocking):`, trackingError.message || trackingError);
+      // Hata olsa bile işlemi durdurmuyoruz
     }
   }
 
@@ -320,9 +352,14 @@ class PostHogService {
     if (!this.enabled || !this.client) return;
     
     try {
-      await this.client.flush();
+      // Flush işlemini timeout ile sınırla (10 saniye)
+      await Promise.race([
+        this.client.flush(),
+        new Promise((resolve) => setTimeout(resolve, 10000))
+      ]);
     } catch (error) {
-      console.error('PostHog flush failed:', error);
+      console.error('[PostHog] Flush failed (non-blocking):', error.message || error);
+      // Flush hatası olsa bile işlemi durdurmuyoruz
     }
   }
 
@@ -330,9 +367,14 @@ class PostHogService {
     if (!this.enabled || !this.client) return;
     
     try {
-      await this.client.shutdown();
+      // Shutdown işlemini timeout ile sınırla (15 saniye)
+      await Promise.race([
+        this.client.shutdown(),
+        new Promise((resolve) => setTimeout(resolve, 15000))
+      ]);
     } catch (error) {
-      console.error('PostHog shutdown failed:', error);
+      console.error('[PostHog] Shutdown failed (non-blocking):', error.message || error);
+      // Shutdown hatası olsa bile uygulamayı durdurmuyoruz
     }
   }
 

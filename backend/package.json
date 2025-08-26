@@ -38,5 +38,9 @@
     "api"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "imports": {
+
+    "#id-generator": "./utils/idGenerator.js"
+  }
 }

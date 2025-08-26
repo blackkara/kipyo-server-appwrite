@@ -2,6 +2,9 @@ import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import pushNotificationService from '../../pushNotificationsService.js';
 import { generatePhotoUrls } from '../../utils/photoUtils.js';
 import crypto from 'crypto';
+import { generateDocumentId } from '#id-generator';
+
+
 
 const { createQuery } = AppwriteService;
 const Query = createQuery();
@@ -611,8 +614,22 @@ class InteractionService {
   }
 
 
-  async likeUser(jwtToken, senderId, receiverId, requestId, log) {
+  async likeUserOld(jwtToken, senderId, receiverId, requestId, log) {
     try {
+      const likeId = generateDocumentId('like', senderId, receiverId);
+      const reverseLikeId = generateDocumentId('like', receiverId, senderId);
+      const matchId = generateDocumentId('match', senderId, receiverId);
+      const reverseMatchId = generateDocumentId('match', receiverId, senderId);
+      const dialogId = generateDocumentId('dialog', senderId, receiverId);
+      const reverseDialogId = generateDocumentId('dialog', receiverId, senderId);
+
+      log(`[${requestId}] Generated IDs - Like: ${likeId}`);
+      log(`[${requestId}] Generated IDs - Reverse Like: ${reverseLikeId}`);
+      log(`[${requestId}] Generated IDs - Match: ${matchId}`);
+      log(`[${requestId}] Generated IDs - Reverse Match: ${reverseMatchId}`);
+      log(`[${requestId}] Generated IDs - Dialog: ${dialogId}`);
+      log(`[${requestId}] Generated IDs - Reverse Dialog: ${reverseDialogId}`);
+
       const operationStart = Date.now();
       const appwriteService = AppwriteService.getInstance();
       const reciprocalLikeCheck = await appwriteService.listDocuments(
@@ -878,6 +895,358 @@ class InteractionService {
       throw new Error(`Failed to unmatch user: ${error.message}`);
     }
   }
+
+  async likeUser(jwtToken, senderId, receiverId, requestId, log) {
+    const operationStart = Date.now();
+
+    try {
+      // ===============================================
+      // 1️⃣ VALIDATION
+      // ===============================================
+      if (senderId === receiverId) {
+        throw new Error('Cannot like yourself');
+      }
+
+      const appwriteService = AppwriteService.getInstance();
+
+      // ===============================================
+      // 2️⃣ DETERMINISTIC IDs
+      // ===============================================
+
+      const likeId = generateDocumentId('like', senderId, receiverId);
+      const reverseLikeId = generateDocumentId('like', receiverId, senderId);
+      const matchId = generateDocumentId('match', senderId, receiverId);
+      const reverseMatchId = generateDocumentId('match', receiverId, senderId);
+      const dialogId = generateDocumentId('dialog', senderId, receiverId);
+      const reverseDialogId = generateDocumentId('dialog', receiverId, senderId);
+
+      log(`[${requestId}] Generated IDs - Like: ${likeId}`);
+      log(`[${requestId}] Generated IDs - Reverse Like: ${reverseLikeId}`);
+      log(`[${requestId}] Generated IDs - Match: ${matchId}`);
+      log(`[${requestId}] Generated IDs - Reverse Match: ${reverseMatchId}`);
+      log(`[${requestId}] Generated IDs - Dialog: ${dialogId}`);
+      log(`[${requestId}] Generated IDs - Reverse Dialog: ${reverseDialogId}`);
+
+
+      log(`[${requestId}] Starting like operation: ${senderId} -> ${receiverId}`);
+
+   
+
+      // ===============================================
+      // 4️⃣ PARALLEL QUERIES (Optimized)
+      // ===============================================
+      const [existingMatch, reciprocalLike, existingLike] = await Promise.all([
+        // Check if already matched
+        appwriteService.getDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_MATCHES_ID,
+          matchId
+        ).catch(err => err.code === 404 ? null : Promise.reject(err)),
+
+        // Check reciprocal like
+        appwriteService.getDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_LIKES_ID,
+          reverseLikeId
+        ).catch(err => err.code === 404 ? null : Promise.reject(err)),
+
+        // Check existing like
+        appwriteService.getDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_LIKES_ID,
+          likeId
+        ).catch(err => err.code === 404 ? null : Promise.reject(err))
+      ]);
+
+      log(`[${requestId}] Query results - Match: ${!!existingMatch}, Reciprocal: ${!!reciprocalLike}, Existing: ${!!existingLike}`);
+
+      // ===============================================
+      // 5️⃣ EARLY RETURN - Already Matched
+      // ===============================================
+      if (existingMatch) {
+      
+        log(`[${requestId}] Already matched`);
+        return {
+          action: 'already_matched',
+          matchId: existingMatch.$id,
+          operationDuration: Date.now() - operationStart
+        };
+      }
+
+      // ===============================================
+      // 6️⃣ CHECK RECIPROCAL LIKE VALIDITY
+      // ===============================================
+      const now = new Date();
+      const isReciprocalValid = reciprocalLike &&
+        !reciprocalLike.matchId &&
+        new Date(reciprocalLike.expireDate) > now;
+
+      log(`[${requestId}] Reciprocal like valid: ${isReciprocalValid}`);
+
+      // ===============================================
+      // 7️⃣ HANDLE LIKE CREATION/UPDATE
+      // ===============================================
+      let like;
+      let action;
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 7);
+
+      if (existingLike) {
+        // Like exists - check if expired or matched
+        if (existingLike.matchId) {
+          log(`[${requestId}] Like already matched`);
+          return {
+            action: 'already_matched',
+            matchId: existingLike.matchId,
+            operationDuration: Date.now() - operationStart
+          };
+        }
+
+        const isExpired = new Date(existingLike.expireDate) < now;
+
+        if (isExpired) {
+          // Update expired like
+          log(`[${requestId}] Updating expired like`);
+          like = await appwriteService.updateDocument(
+            jwtToken,
+            process.env.DB_COLLECTION_LIKES_ID,
+            likeId,
+            {
+              expireDate: expirationDate.toISOString(),
+              updatedAt: now.toISOString(),
+              matchId: null
+            }
+          );
+          action = 're-liked';
+        } else {
+          // Like still valid
+          log(`[${requestId}] Like still valid`);
+          like = existingLike;
+          action = 'already_liked';
+        }
+      } else {
+        // Create new like with deterministic ID
+        log(`[${requestId}] Creating new like`);
+        try {
+          like = await appwriteService.createDocumentWithAdminPrivileges(
+            jwtToken,
+            senderId,
+            process.env.DB_COLLECTION_LIKES_ID,
+            likeId, // DETERMINISTIC ID
+            {
+              likerId: senderId,
+              likedId: receiverId,
+              likerRef: senderId,
+              likedRef: receiverId,
+              expireDate: expirationDate.toISOString(),
+              matchId: null
+            
+            },
+            [
+              { userId: senderId, permissions: ['read', 'update', 'delete'] },
+              { userId: receiverId, permissions: ['read'] }
+            ]
+          );
+          action = 'liked';
+        } catch (error) {
+          if (error.code === 409) {
+            // Document already exists (race condition handled)
+            log(`[${requestId}] Like already exists (race condition)`);
+            like = await appwriteService.getDocument(
+              jwtToken,
+              process.env.DB_COLLECTION_LIKES_ID,
+              likeId
+            );
+            action = 'already_liked';
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      // ===============================================
+      // 8️⃣ HANDLE MATCH CREATION
+      // ===============================================
+      if (isReciprocalValid && action !== 'already_liked' && action !== 'already_matched') {
+        log(`[${requestId}] Creating match`);
+
+        try {
+          // Create match with deterministic ID
+          const match = await appwriteService.createDocumentWithAdminPrivileges(
+            jwtToken,
+            senderId,
+            process.env.DB_COLLECTION_MATCHES_ID,
+            matchId, // DETERMINISTIC ID
+            {
+              userFirst: [senderId, receiverId].sort()[0],
+              userFirstRef: [senderId, receiverId].sort()[0],
+              userSecond: [senderId, receiverId].sort()[1],
+              userSecondRef: [senderId, receiverId].sort()[1],
+              createDate: now.toISOString()
+            },
+            [
+              { userId: senderId, permissions: ['read', 'update', 'delete'] },
+              { userId: receiverId, permissions: ['read', 'update', 'delete'] }
+            ]
+          );
+
+          // Update both likes with match ID (parallel)
+          await Promise.all([
+            appwriteService.updateDocument(
+              jwtToken,
+              process.env.DB_COLLECTION_LIKES_ID,
+              likeId,
+              { matchId: matchId }
+            ),
+            appwriteService.updateDocumentWithAdminPrivileges(
+              jwtToken,
+              receiverId, // Important: correct userId for permissions
+              process.env.DB_COLLECTION_LIKES_ID,
+              reverseLikeId,
+              { matchId: matchId },
+              [{ userId: senderId, permissions: ['read'] }]
+            )
+          ]);
+
+          // Create dialog synchronously (critical for consistency)
+          try {
+            await appwriteService.createDocumentWithAdminPrivileges(
+              jwtToken,
+              senderId,
+              process.env.DB_COLLECTION_DIALOGS_ID,
+              dialogId, // DETERMINISTIC ID
+              {
+                occupants: [senderId, receiverId].sort(),
+                occupantIds: [senderId, receiverId].sort(),
+                createdAt: now.toISOString(),
+                updatedAt: now.toISOString(),
+                lastMessage: '',
+                lastMessageSenderId: '',
+                blockedIds: [],
+                matchId: matchId
+              },
+              [
+                { userId: senderId, permissions: ['read', 'write', 'update', 'delete'] },
+                { userId: receiverId, permissions: ['read', 'write', 'update', 'delete'] }
+              ]
+            );
+          } catch (dialogError) {
+            if (dialogError.code !== 409) {
+              // If not duplicate error, it's a real problem
+              log(`[${requestId}] ERROR creating dialog: ${dialogError.message}`);
+            }
+          }
+          
+          // Send notifications asynchronously (non-blocking)
+          this.sendMatchNotificationAsync(senderId, receiverId, matchId, requestId, log);
+
+          const operationDuration = Date.now() - operationStart;
+          log(`[${requestId}] Match created successfully in ${operationDuration}ms`);
+
+          return {
+            action: 'matched',
+            likeId: like.$id,
+            matchId: match.$id,
+            isMatch: true,
+            operationDuration
+          };
+
+        } catch (matchError) {
+          if (matchError.code === 409) {
+            // Match already exists (race condition)
+            log(`[${requestId}] Match already exists (race condition)`);
+
+            const existingMatch = await appwriteService.getDocument(
+              jwtToken,
+              process.env.DB_COLLECTION_MATCHES_ID,
+              matchId
+            );
+
+            // Update like with match ID
+            await appwriteService.updateDocument(
+              jwtToken,
+              process.env.DB_COLLECTION_LIKES_ID,
+              likeId,
+              { matchId: matchId }
+            );
+
+            return {
+              action: 'matched',
+              likeId: like.$id,
+              matchId: existingMatch.$id,
+              isMatch: true,
+              operationDuration: Date.now() - operationStart
+            };
+          }
+          throw matchError;
+        }
+      }
+
+      // ===============================================
+      // 9️⃣ SEND LIKE NOTIFICATION (if new like)
+      // ===============================================
+      if (action === 'liked' || action === 're-liked') {
+        this.sendLikeNotificationAsync(senderId, receiverId, requestId, log);
+      }
+
+      // ===============================================
+      // 🔟 RETURN RESULT
+      // ===============================================
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] Like operation completed in ${operationDuration}ms`);
+
+      return {
+        action: action,
+        likeId: like.$id,
+        isMatch: false,
+        matchId: null,
+        operationDuration
+      };
+
+    } catch (error) {
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] ERROR in likeUser after ${operationDuration}ms: ${error.message}`);
+
+      // Don't expose internal errors to client
+      if (error.message === 'Cannot like yourself') {
+        throw error;
+      }
+
+      throw new Error('Failed to process like request. Please try again.');
+    }
+  }
+
+
+  async sendLikeNotificationAsync(senderId, receiverId, requestId, log) {
+    // Fire and forget pattern
+    pushNotificationService.sendLikeNotification(
+      senderId,
+      receiverId,
+      { message: 'Someone liked you!' }
+    ).catch(error => {
+      log(`[${requestId}] Failed to send like notification: ${error.message}`);
+    });
+  }
+
+  async sendMatchNotificationAsync(senderId, receiverId, matchId, requestId, log) {
+    // Fire and forget pattern
+    Promise.all([
+      pushNotificationService.sendMatchNotification(
+        senderId,
+        receiverId,
+        { matchId, message: "It's a match!" }
+      ),
+      pushNotificationService.sendMatchNotification(
+        receiverId,
+        senderId,
+        { matchId, message: "It's a match!" }
+      )
+    ]).catch(error => {
+      log(`[${requestId}] Failed to send match notification: ${error.message}`);
+    });
+  }
+
 }
 
 export default new InteractionService();
+
