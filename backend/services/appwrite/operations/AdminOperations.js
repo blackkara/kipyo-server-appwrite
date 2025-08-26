@@ -478,6 +478,167 @@ export class AdminOperations {
   }
 
   /**
+   * Delete documents by query with admin privileges
+   * Uses Appwrite's native bulk delete capability
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
+   * @param {string} collectionId - Collection ID
+   * @param {Array} queries - Array of query strings (e.g., [Query.equal('status', 'archived')])
+   * @returns {Promise<Object>} - Bulk deletion result
+   */
+  async deleteDocumentsByQueryWithAdminPrivileges(jwtToken, collectionId, queries = []) {
+    const context = {
+      methodName: 'deleteDocumentsByQueryWithAdminPrivileges',
+      collectionId,
+      additionalData: { 
+        queriesCount: queries.length,
+        hasQueries: queries.length > 0
+      }
+    };
+
+    return this.executeAdminOperation(async () => {
+      // Safety check: Prevent accidental deletion of all documents
+      if (!queries || queries.length === 0) {
+        const errorMsg = 'Queries are required for bulk delete. To delete all documents, use deleteAllDocumentsWithAdminPrivileges() method explicitly.';
+        this.log(`[ADMIN ERROR] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      this.log(`[ADMIN ACTION] Deleting documents in ${collectionId} with ${queries.length} queries`);
+
+      const databases = this.clientManager.getAdminDatabases();
+      const databaseId = this.getDatabaseId();
+      
+      try {
+        // Use Appwrite's native bulk delete
+        const result = await databases.deleteDocuments(
+          databaseId,
+          collectionId,
+          queries
+        );
+
+        await this.trackAdminEvent('admin_bulk_delete_by_query', {
+          collection_id: collectionId,
+          queries_count: queries.length
+        }, 'admin');
+
+        return {
+          success: true,
+          message: `Documents matching queries deleted successfully`,
+          result
+        };
+
+      } catch (error) {
+        // If the method doesn't exist (older SDK), fall back to manual deletion
+        if (error.message?.includes('deleteDocuments is not a function')) {
+          this.log('[ADMIN WARNING] deleteDocuments not available, falling back to manual deletion');
+          return this.deleteDocumentsByQueryFallback(jwtToken, collectionId, queries);
+        }
+        throw error;
+      }
+    }, context);
+  }
+
+  /**
+   * Delete ALL documents in a collection with admin privileges
+   * THIS IS A DANGEROUS OPERATION - USE WITH EXTREME CAUTION
+   * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
+   * @param {string} collectionId - Collection ID
+   * @param {boolean} confirmDeletion - Must be explicitly set to true to proceed
+   * @returns {Promise<Object>} - Bulk deletion result
+   */
+  async deleteAllDocumentsWithAdminPrivileges(jwtToken, collectionId, confirmDeletion = false) {
+    const context = {
+      methodName: 'deleteAllDocumentsWithAdminPrivileges',
+      collectionId,
+      additionalData: { 
+        confirmDeletion
+      }
+    };
+
+    return this.executeAdminOperation(async () => {
+      // Safety check: Require explicit confirmation
+      if (confirmDeletion !== true) {
+        const errorMsg = 'Must explicitly confirm deletion by passing confirmDeletion=true';
+        this.log(`[ADMIN ERROR] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      this.log(`[ADMIN WARNING] DELETING ALL DOCUMENTS in collection ${collectionId}`);
+
+      const databases = this.clientManager.getAdminDatabases();
+      const databaseId = this.getDatabaseId();
+      
+      try {
+        // Use Appwrite's native bulk delete with no queries
+        const result = await databases.deleteDocuments(
+          databaseId,
+          collectionId,
+          [] // Empty array deletes all documents
+        );
+
+        await this.trackAdminEvent('admin_delete_all_documents', {
+          collection_id: collectionId,
+          confirmed: true
+        }, 'admin');
+
+        return {
+          success: true,
+          message: `All documents in collection ${collectionId} deleted successfully`,
+          result
+        };
+
+      } catch (error) {
+        // If the method doesn't exist (older SDK), fall back to manual deletion
+        if (error.message?.includes('deleteDocuments is not a function')) {
+          this.log('[ADMIN WARNING] deleteDocuments not available, falling back to manual deletion');
+          return this.deleteDocumentsByQueryFallback(jwtToken, collectionId, []);
+        }
+        throw error;
+      }
+    }, context);
+  }
+
+  /**
+   * Fallback method for bulk delete if deleteDocuments is not available
+   * @private
+   */
+  async deleteDocumentsByQueryFallback(jwtToken, collectionId, queries) {
+    this.log('[ADMIN ACTION] Using fallback deletion method');
+    
+    const databases = this.clientManager.getAdminDatabases();
+    const databaseId = this.getDatabaseId();
+    
+    // First, list all documents matching the queries
+    const documents = await databases.listDocuments(
+      databaseId,
+      collectionId,
+      queries
+    );
+
+    if (documents.documents.length === 0) {
+      return {
+        success: true,
+        message: 'No documents found matching the queries',
+        deletedCount: 0
+      };
+    }
+
+    // Extract document IDs
+    const documentIds = documents.documents.map(doc => doc.$id);
+    
+    // Use existing bulk delete method
+    const deleteResult = await this.bulkDeleteDocuments(jwtToken, collectionId, documentIds);
+    
+    return {
+      success: deleteResult.successful.length > 0,
+      message: `Deleted ${deleteResult.successful.length} of ${documentIds.length} documents`,
+      deletedCount: deleteResult.successful.length,
+      failedCount: deleteResult.failed.length,
+      details: deleteResult
+    };
+  }
+
+  /**
    * Update document permissions
    * @param {string} jwtToken - JWT token for user identification (admin operations will use API key internally)
    * @param {string} collectionId - Collection ID

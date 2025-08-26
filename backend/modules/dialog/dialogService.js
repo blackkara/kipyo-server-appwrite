@@ -248,60 +248,66 @@ class DialogService {
     }
   }
 
-  async deleteDialog(jwtToken, dialogId, requestedUserId, requestId, log) {
+  async deleteDialog(jwtToken, dialogId, matchId, requestId, log) {
     try {
-      log(`[${requestId}] Starting dialog deletion for dialogId: ${dialogId}`);
+      log(`[${requestId}] Starting dialog deletion for dialogId: ${dialogId} or matchId: ${matchId}`);
 
       const appwriteService = AppwriteService.getInstance();
-      await appwriteService.deleteDocumentWithAdminPrivileges(
-        jwtToken,
-        process.env.DB_COLLECTION_DIALOGS_ID,
-        dialogId
-      );
+      const results = {
+        deletedDialog: null,
+        deletedMatch: null,
+        deletedAt: new Date().toISOString()
+      };
 
-      await appwriteService.bulkDeleteDocuments(
-        jwtToken,
-        process.env.DB_COLLECTION_MATCHES_ID,
-        [
-          
-        ]
-      );
-
-      // First check if dialog exists and user has permission
-      log(`[${requestId}] Checking if dialog exists and user has permission`);
-
-      const dialog = await appwriteService.getDocument(
-        jwtToken,
-        process.env.DB_COLLECTION_DIALOGS_ID,
-        dialogId
-      );
-
-      if (!dialog) {
-        log(`[${requestId}] Dialog not found: ${dialogId}`);
-        throw new Error('Dialog not found');
+      // Delete dialog if dialogId is provided
+      if (dialogId) {
+        try {
+          log(`[${requestId}] Deleting dialog with ID: ${dialogId}`);
+          await appwriteService.deleteDocumentWithAdminPrivileges(
+            jwtToken,
+            process.env.DB_COLLECTION_DIALOGS_ID,
+            dialogId
+          );
+          results.deletedDialog = dialogId;
+          log(`[${requestId}] Dialog deleted successfully: ${dialogId}`);
+        } catch (dialogError) {
+          log(`[${requestId}] Failed to delete dialog ${dialogId}: ${dialogError.message}`);
+          // Don't throw immediately, try to delete match too
+          if (!dialogError.message.includes('not found')) {
+            throw new Error(`Failed to delete dialog: ${dialogError.message}`);
+          }
+        }
       }
 
-      // Check if the requesting user is one of the occupants
-      if (!dialog.occupantIds || !dialog.occupantIds.includes(requestedUserId)) {
-        log(`[${requestId}] User ${requestedUserId} is not authorized to delete dialog ${dialogId}`);
-        throw new Error('You are not authorized to delete this dialog');
+      // Delete match if matchId is provided
+      if (matchId) {
+        try {
+          log(`[${requestId}] Deleting match with ID: ${matchId}`);
+          await appwriteService.deleteDocumentWithAdminPrivileges(
+            jwtToken,
+            process.env.DB_COLLECTION_MATCHES_ID,
+            matchId
+          );
+          results.deletedMatch = matchId;
+          log(`[${requestId}] Match deleted successfully: ${matchId}`);
+        } catch (matchError) {
+          log(`[${requestId}] Failed to delete match ${matchId}: ${matchError.message}`);
+          if (!matchError.message.includes('not found')) {
+            throw new Error(`Failed to delete match: ${matchError.message}`);
+          }
+        }
       }
 
-      log(`[${requestId}] User authorized, proceeding with deletion`);
+      // Check if at least one deletion was successful
+      if (!results.deletedDialog && !results.deletedMatch) {
+        throw new Error('No documents were found to delete');
+      }
 
-      // Delete the dialog
-      const deletedDialog = await appwriteService.deleteDocument(
-        jwtToken,
-        process.env.DB_COLLECTION_DIALOGS_ID,
-        dialogId
-      );
-
-      log(`[${requestId}] Dialog deleted successfully: ${dialogId}`);
+      log(`[${requestId}] Deletion completed - Dialog: ${results.deletedDialog || 'N/A'}, Match: ${results.deletedMatch || 'N/A'}`);
 
       return {
-        deleted: true,
-        dialogId: dialogId,
-        deletedAt: new Date().toISOString()
+        success: true,
+        ...results
       };
 
     } catch (error) {
@@ -309,13 +315,15 @@ class DialogService {
 
       // Re-throw with more specific error messages
       if (error.message.includes('not found') || error.code === 404) {
-        throw new Error('Dialog not found or does not exist');
-      } else if (error.message.includes('unauthorized') || error.message.includes('not authorized') || error.code === 401) {
-        throw new Error('You are not authorized to delete this dialog');
+        throw new Error('Dialog or match not found');
+      } else if (error.message.includes('unauthorized') || error.code === 401) {
+        throw new Error('Unauthorized to delete dialog or match');
       } else if (error.code === 403) {
-        throw new Error('Access denied to delete this dialog');
+        throw new Error('Access denied to delete dialog or match');
+      } else if (error.message.includes('required')) {
+        throw error; // Pass validation errors as-is
       } else {
-        throw new Error(`Failed to delete dialog: ${error.message}`);
+        throw new Error(`Failed to delete dialog/match: ${error.message}`);
       }
     }
   }
