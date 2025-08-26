@@ -1,6 +1,7 @@
 import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import profileService from '../profile/profileService.js';
 import crypto from 'crypto';
+import { generateDocumentId } from '#id-generator';
 
 const { createQuery } = AppwriteService;
 const Query = createQuery();
@@ -248,7 +249,7 @@ class DialogService {
     }
   }
 
-  async deleteDialog(jwtToken, dialogId, matchId, requestId, log) {
+  async deleteDialogOld(jwtToken, dialogId, matchId, requestedUserId, requestId, log) {
     try {
       log(`[${requestId}] Starting dialog deletion for dialogId: ${dialogId} or matchId: ${matchId}`);
 
@@ -259,17 +260,40 @@ class DialogService {
         deletedAt: new Date().toISOString()
       };
 
+      // Check dialog
+
+
       // Delete dialog if dialogId is provided
       if (dialogId) {
         try {
-          log(`[${requestId}] Deleting dialog with ID: ${dialogId}`);
-          await appwriteService.deleteDocumentWithAdminPrivileges(
+          const dialog = await appwriteService.getDocument(
             jwtToken,
             process.env.DB_COLLECTION_DIALOGS_ID,
             dialogId
           );
-          results.deletedDialog = dialogId;
-          log(`[${requestId}] Dialog deleted successfully: ${dialogId}`);
+
+          if (dialog) {
+            // Silme talebi ancak bu sohbetin katılımcıları tarafından yapılmalıdır
+            const occupantIds = dialog.occupantIds || [];
+            if (occupantIds.includes(requestedUserId)) {
+              log(`[${requestId}] User ${requestedUserId} is a participant. Proceeding with deletion.`);
+            } else {
+              log(`[${requestId}] User ${requestedUserId} is not a participant. Deletion denied.`);
+              throw new Error('User is not a participant of the dialog');
+            }
+
+            log(`[${requestId}] Deleting dialog with ID: ${dialogId}`);
+            await appwriteService.deleteDocumentWithAdminPrivileges(
+              jwtToken,
+              process.env.DB_COLLECTION_DIALOGS_ID,
+              dialogId
+            );
+
+            results.deletedDialog = dialogId;
+            log(`[${requestId}] Dialog deleted successfully: ${dialogId}`);
+          }
+
+
         } catch (dialogError) {
           log(`[${requestId}] Failed to delete dialog ${dialogId}: ${dialogError.message}`);
           // Don't throw immediately, try to delete match too
@@ -282,14 +306,24 @@ class DialogService {
       // Delete match if matchId is provided
       if (matchId) {
         try {
-          log(`[${requestId}] Deleting match with ID: ${matchId}`);
-          await appwriteService.deleteDocumentWithAdminPrivileges(
+          const match = await appwriteService.getDocument(
             jwtToken,
             process.env.DB_COLLECTION_MATCHES_ID,
             matchId
           );
-          results.deletedMatch = matchId;
-          log(`[${requestId}] Match deleted successfully: ${matchId}`);
+
+          if (match) {
+
+            log(`[${requestId}] Deleting match with ID: ${matchId}`);
+            await appwriteService.deleteDocumentWithAdminPrivileges(
+              jwtToken,
+              process.env.DB_COLLECTION_MATCHES_ID,
+              matchId
+            );
+            results.deletedMatch = matchId;
+            log(`[${requestId}] Match deleted successfully: ${matchId}`);
+          }
+
         } catch (matchError) {
           log(`[${requestId}] Failed to delete match ${matchId}: ${matchError.message}`);
           if (!matchError.message.includes('not found')) {
@@ -325,6 +359,140 @@ class DialogService {
       } else {
         throw new Error(`Failed to delete dialog/match: ${error.message}`);
       }
+    }
+  }
+  /**
+   * İki kullanıcı arasındaki TÜM ilişkileri siler
+   * - Like'lar (her iki yönde)
+   * - Match
+   * - Dialog
+   * 
+   * NOT: Hangi kayıtların var olduğu önemli değil, bulduklarını siler
+   * 404 hataları yoksayılır
+   */
+  async deleteDialog(jwtToken, occupantId, requestedUserId, requestId, log) {
+    try {
+      const startTime = Date.now();
+      log(`[${requestId}] Removing all relations between ${requestedUserId} and ${occupantId}`);
+
+      const appwriteService = AppwriteService.getInstance();
+
+      // Generate all possible IDs
+      const ids = {
+        like: generateDocumentId('like', requestedUserId, occupantId),
+        reverseLike: generateDocumentId('like', occupantId, requestedUserId),
+        match: generateDocumentId('match', requestedUserId, occupantId),
+        dialog: generateDocumentId('dialog', requestedUserId, occupantId)
+      };
+
+      log(`[${requestId}] Attempting to delete:`, ids);
+
+      // ✅ Promise.allSettled = HİÇBİRİ DİĞERİNİ ENGELLEMEZ!
+      const deletions = await Promise.allSettled([
+        // Like: user1 → user2
+        appwriteService.deleteDocumentWithAdminPrivileges(
+          jwtToken,
+          process.env.DB_COLLECTION_LIKES_ID,
+          ids.like
+        ).catch(err => {
+          // 404 = Normal (like yoksa sorun değil)
+          if (err.code !== 404) log(`[${requestId}] Like deletion error: ${err.message}`);
+          return { deleted: false, type: 'like', error: err.code };
+        }),
+
+        // Like: user2 → user1
+        appwriteService.deleteDocumentWithAdminPrivileges(
+          jwtToken,
+          process.env.DB_COLLECTION_LIKES_ID,
+          ids.reverseLike
+        ).catch(err => {
+          if (err.code !== 404) log(`[${requestId}] Reverse like deletion error: ${err.message}`);
+          return { deleted: false, type: 'reverseLike', error: err.code };
+        }),
+
+        // Match (her iki kullanıcı için aynı)
+        appwriteService.deleteDocumentWithAdminPrivileges(
+          jwtToken,
+          process.env.DB_COLLECTION_MATCHES_ID,
+          ids.match
+        ).catch(err => {
+          if (err.code !== 404) log(`[${requestId}] Match deletion error: ${err.message}`);
+          return { deleted: false, type: 'match', error: err.code };
+        }),
+
+        // Dialog (her iki kullanıcı için aynı)
+        appwriteService.deleteDocumentWithAdminPrivileges(
+          jwtToken,
+          process.env.DB_COLLECTION_DIALOGS_ID,
+          ids.dialog
+        ).catch(err => {
+          if (err.code !== 404) log(`[${requestId}] Dialog deletion error: ${err.message}`);
+          return { deleted: false, type: 'dialog', error: err.code };
+        })
+      ]);
+
+      // Analyze results
+      const summary = {
+        deletedCount: 0,
+        deleted: [],
+        notFound: [],
+        errors: []
+      };
+
+      const types = ['like', 'reverseLike', 'match', 'dialog'];
+
+      deletions.forEach((result, index) => {
+        const type = types[index];
+
+        if (result.status === 'fulfilled') {
+          if (result.value?.deleted === false) {
+            // Deletion failed
+            if (result.value.error === 404) {
+              summary.notFound.push(type);
+            } else {
+              summary.errors.push({ type, error: result.value.error });
+            }
+          } else {
+            // Successfully deleted
+            summary.deleted.push(type);
+            summary.deletedCount++;
+          }
+        } else {
+          // Promise rejected (shouldn't happen with our catch blocks)
+          summary.errors.push({ type, error: result.reason });
+        }
+      });
+
+      const duration = Date.now() - startTime;
+
+      log(`[${requestId}] Unmatch completed in ${duration}ms:`, {
+        deleted: summary.deleted,
+        notFound: summary.notFound,
+        errors: summary.errors
+      });
+
+      // ✅ EN AZ BİR KAYIT SİLİNDİYSE BAŞARILI!
+      // Dialog-only case için bile çalışır
+      const success = summary.deletedCount > 0;
+
+      return {
+        success,
+        message: success
+          ? `Removed ${summary.deletedCount} relation(s) between users`
+          : 'No relations found between users',
+        deletedCount: summary.deletedCount,
+        details: {
+          deleted: summary.deleted,
+          notFound: summary.notFound,
+          hasErrors: summary.errors.length > 0
+        },
+        duration
+      };
+
+    } catch (error) {
+      log(`[${requestId}] UNEXPECTED ERROR in unmatchUsers: ${error.message}`);
+      // Unexpected error (network, auth, etc.)
+      throw new Error(`Failed to unmatch users: ${error.message}`);
     }
   }
 

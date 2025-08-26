@@ -733,3 +733,14 @@ export function extractJWTFromHeaders(headers) {
 }
 
 export default AppwriteService;
+
+
+
+/**
+ * 
+ * 
+ *   const likeId = generateDocumentId('like', senderId, receiverId);
+      const reverseLikeId = generateDocumentId('like', receiverId, senderId);
+      const matchId = generateDocumentId('match', senderId, receiverId);
+      const dialogId = generateDocumentId('dialog', senderId, receiverId);
+ */
