@@ -1052,7 +1052,7 @@ class ProfileService {
         displayOrder,
         isActive: true,
         thumbnailUrl,
-        profileRef: profileId
+        profile: profileId
       }, [
       { userId: userId, permissions: ['write', 'read', 'delete'] }
     ]
