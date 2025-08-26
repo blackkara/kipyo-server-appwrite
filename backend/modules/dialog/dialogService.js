@@ -248,5 +248,77 @@ class DialogService {
     }
   }
 
+  async deleteDialog(jwtToken, dialogId, requestedUserId, requestId, log) {
+    try {
+      log(`[${requestId}] Starting dialog deletion for dialogId: ${dialogId}`);
+
+      const appwriteService = AppwriteService.getInstance();
+      await appwriteService.deleteDocumentWithAdminPrivileges(
+        jwtToken,
+        process.env.DB_COLLECTION_DIALOGS_ID,
+        dialogId
+      );
+
+      await appwriteService.bulkDeleteDocuments(
+        jwtToken,
+        process.env.DB_COLLECTION_MATCHES_ID,
+        [
+          
+        ]
+      );
+
+      // First check if dialog exists and user has permission
+      log(`[${requestId}] Checking if dialog exists and user has permission`);
+
+      const dialog = await appwriteService.getDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_DIALOGS_ID,
+        dialogId
+      );
+
+      if (!dialog) {
+        log(`[${requestId}] Dialog not found: ${dialogId}`);
+        throw new Error('Dialog not found');
+      }
+
+      // Check if the requesting user is one of the occupants
+      if (!dialog.occupantIds || !dialog.occupantIds.includes(requestedUserId)) {
+        log(`[${requestId}] User ${requestedUserId} is not authorized to delete dialog ${dialogId}`);
+        throw new Error('You are not authorized to delete this dialog');
+      }
+
+      log(`[${requestId}] User authorized, proceeding with deletion`);
+
+      // Delete the dialog
+      const deletedDialog = await appwriteService.deleteDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_DIALOGS_ID,
+        dialogId
+      );
+
+      log(`[${requestId}] Dialog deleted successfully: ${dialogId}`);
+
+      return {
+        deleted: true,
+        dialogId: dialogId,
+        deletedAt: new Date().toISOString()
+      };
+
+    } catch (error) {
+      log(`[${requestId}] ERROR in deleteDialog: ${error.message}`);
+
+      // Re-throw with more specific error messages
+      if (error.message.includes('not found') || error.code === 404) {
+        throw new Error('Dialog not found or does not exist');
+      } else if (error.message.includes('unauthorized') || error.message.includes('not authorized') || error.code === 401) {
+        throw new Error('You are not authorized to delete this dialog');
+      } else if (error.code === 403) {
+        throw new Error('Access denied to delete this dialog');
+      } else {
+        throw new Error(`Failed to delete dialog: ${error.message}`);
+      }
+    }
+  }
+
 }
 export default new DialogService();

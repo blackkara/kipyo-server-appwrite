@@ -113,6 +113,85 @@ class DialogController {
       log(`[${requestId}] ERROR Details: ${serviceError.message}`);
     }
   }
+
+
+  async deleteDialog(req, res) {
+    const { startTime, requestId, jwtToken, requestedUser } = req;
+    const log = (message) => console.log(message);
+    const error = (message, err) => console.error(message, err);
+
+    try {
+      log(`[${requestId}] Delete dialog request started`);
+      const { dialogId } = req.params;
+
+      log(`[${requestId}] Request params: dialogId=${dialogId}, requesterId=${requestedUser.$id}`);
+
+      const result = await dialogService.deleteDialog(
+        dialogId,
+        jwtToken,
+        requestedUser.$id,
+        requestId,
+        log
+      );
+
+      const duration = Date.now() - startTime;
+      log(`[${requestId}] Request completed successfully in ${duration}ms`);
+
+      return res.status(200).json({
+        success: true,
+        code: 200,
+        message: 'Dialog deleted successfully',
+        data: result,
+        requestId: requestId,
+        duration: duration
+      });
+
+    } catch (serviceError) {
+      const duration = Date.now() - startTime;
+      error(`[${requestId}] Request failed after ${duration}ms:`, serviceError);
+      log(`[${requestId}] ERROR Details: ${serviceError.message}`);
+
+      // Error categorization
+      let statusCode = 500;
+      let errorType = 'processing_error';
+      let errorMessage = serviceError.message || 'Unknown error';
+
+      if (errorMessage.includes('required') ||
+        errorMessage.includes('parameter') ||
+        errorMessage.includes('invalid')) {
+        statusCode = 400;
+        errorType = 'general_argument_invalid';
+      } else if (errorMessage.includes('unauthorized') ||
+        errorMessage.includes('JWT validation failed') ||
+        errorMessage.includes('token') ||
+        errorMessage.includes('permission')) {
+        statusCode = 401;
+        errorType = 'general_unauthorized';
+      } else if (errorMessage.includes('forbidden') ||
+        errorMessage.includes('access denied')) {
+        statusCode = 403;
+        errorType = 'general_forbidden';
+      } else if (errorMessage.includes('not found') ||
+        errorMessage.includes('does not exist')) {
+        statusCode = 404;
+        errorType = 'general_not_found';
+      } else if (errorMessage.includes('Failed to delete') ||
+        errorMessage.includes('Failed to check') ||
+        errorMessage.includes('Failed to update')) {
+        statusCode = 500;
+        errorType = 'processing_error';
+      }
+
+      return res.status(statusCode).json({
+        success: false,
+        code: statusCode,
+        type: errorType,
+        message: errorMessage,
+        requestId: requestId,
+        duration: duration
+      });
+    }
+  }
 }
 
 export default new DialogController();
