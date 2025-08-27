@@ -9,16 +9,63 @@ class MessageController {
 
     try {
       log(`[${requestId}] Send message request started`);
-      const { message, senderId, receiverId, dialogId, messageType, imageBase64 } = req.body;
+      const { message, senderId, receiverId, dialogId, messageType, imageBase64, metadata } = req.body;
+
+
+      let validatedMetadata = null;
+      if (metadata) {
+        try {
+          // Eğer string olarak geldiyse parse et
+          const parsedMetadata = typeof metadata === 'string'
+            ? JSON.parse(metadata)
+            : metadata;
+
+          // Temel validasyon
+          if (parsedMetadata.mediaSource) {
+            // mediaSource değerlerini kontrol et
+            const validSources = ['camera', 'gallery'];
+            if (!validSources.includes(parsedMetadata.mediaSource)) {
+              log(`[${requestId}] Invalid mediaSource: ${parsedMetadata.mediaSource}, using 'gallery' as default`);
+              parsedMetadata.mediaSource = 'gallery';
+            }
+          }
+
+          // JSON string olarak sakla (DB için)
+          validatedMetadata = JSON.stringify(parsedMetadata);
+
+          // Karakter limiti kontrolü
+          if (validatedMetadata.length > 500) {
+            log(`[${requestId}] Metadata too long (${validatedMetadata.length} chars), truncating additionalInfo`);
+            // additionalInfo'yu kısalt veya tamamen kaldır
+            const truncated = {
+              mediaSource: parsedMetadata.mediaSource,
+              capturedAt: parsedMetadata.capturedAt
+            };
+            validatedMetadata = JSON.stringify(truncated);
+          }
+
+        } catch (metadataError) {
+          log(`[${requestId}] Error parsing metadata: ${metadataError.message}, ignoring metadata`);
+          validatedMetadata = null; // Hata durumunda metadata'yı yoksay
+        }
+      }
+
 
       log(`[${requestId}] Request params: message=${message}, senderId=${senderId}, receiverId=${receiverId}, dialogId=${dialogId}, messageType=${messageType}, requesterId=${requestedUser.$id}`);
       const appwriteService = new AppwriteService();
-      const newMessage = await appwriteService.sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64);
+      const newMessage = await appwriteService.sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64, validatedMetadata);
 
       const duration = Date.now() - startTime;
       log(`[${requestId}] Request completed successfully in ${duration}ms`);
 
-      return res.status(200).json({ newMessage });
+      return res.status(200).json({
+        success: true,
+        code: 200,
+        message: 'Message sent successfully',
+        data: newMessage,
+        requestId: requestId,
+        duration: duration
+      });
     } catch (e) {
       const duration = Date.now() - startTime;
       error(`[${requestId}] Request failed after ${duration}ms:`, e);

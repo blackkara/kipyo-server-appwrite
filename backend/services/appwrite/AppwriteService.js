@@ -613,8 +613,8 @@ class AppwriteService {
    * @param {string} imageBase64 - Base64 encoded media data (required for messageType 2,3,4)
    * @returns {Promise<Object>} - Message result with notification status
    */
-  async sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64 = null) {
-    return this.messagingService.sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64);
+  async sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64 = null, metadata = null) {
+    return this.messagingService.sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64, metadata);
   }
 
   /**

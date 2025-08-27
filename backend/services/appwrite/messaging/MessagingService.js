@@ -117,24 +117,23 @@ export class MessagingService {
     const bucket = process.env.SPACES_BUCKET;
     return `${baseUrl}/${bucket}/${photoKey}`;
   }
-
   /**
-   * Create a new message document
-   */
-  async createMessage(jwtToken, senderId, receiverId, message, messageType, conversationId, attachment = null) {
+ * Create a message document in the database
+ * @private
+ */
+  async createMessage(jwtToken, senderId, receiverId, messageContent, messageType, dialogId, attachment = null, metadata = null) {
     try {
       const messageData = {
-        message: message ? message.trim() : '',
         senderId,
         receiverId,
+        message: messageContent,
         messageType,
-        dialogId: conversationId
+        dialogId,
+        translatedBody: '',
+        translatedLanguage: '',
+        ...(attachment && { attachment: JSON.stringify(attachment) }),
+        ...(metadata && { metadata: metadata })  // metadata zaten JSON string olarak geliyor
       };
-
-      // Add attachment if present
-      if (attachment) {
-        messageData.attachment = JSON.stringify(attachment);
-      }
 
       const newMessage = await this.adminOps.createDocumentWithAdminPrivileges(
         jwtToken,
@@ -145,18 +144,22 @@ export class MessagingService {
         [{ userId: receiverId, permissions: ['read'] }]
       );
 
+
+      this.log(`Message created: ${newMessage.$id}`);
       return newMessage;
+
     } catch (error) {
-      this.log('Failed to create message:', error.message);
-      throw new Error(`Failed to create message: ${error.message}`);
+      this.log('Failed to create message document:', error.message);
+      throw error;
     }
   }
+
 
 
   /**
    * Send a regular message between matched/liked users
    */
-  async sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64 = null) {
+  async sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64 = null, metadata = null) {
     const context = {
       methodName: 'sendMessage',
       senderId,
@@ -221,14 +224,10 @@ export class MessagingService {
         // Create attachment object
         attachment = {
           url: this.generatePhotoUrl(key),
-
-
           type: messageType === 2 ? 'photo' : messageType === 3 ? 'video' : 'audio'
         };
 
-        // Keep original message as is (could be caption or empty)
         messageContent = message || '';
-
         this.log(`Media uploaded successfully: ${attachment.type} - ${uploadResult.key}`);
       }
 
@@ -243,22 +242,36 @@ export class MessagingService {
           receiverId,
           messageContent,
           messageType,
-          dialog.$id,
-          attachment
+          dialogId,
+          attachment,
+          metadata
         ),
-        this.updateDialog(jwtToken, dialog.$id, dialogPreview, senderId, receiverId)
+        this.updateDialog(jwtToken, dialogId, dialogPreview, senderId, receiverId)
       ]);
 
       // Track message event
       if (this.postHog) {
+        // Parse metadata for analytics if available
+        let mediaSource = null;
+        if (metadata) {
+          try {
+            const parsedMetadata = JSON.parse(metadata);
+            mediaSource = parsedMetadata.mediaSource;
+          } catch (e) {
+            // Ignore parse errors for analytics
+          }
+        }
+
         await this.postHog.trackBusinessEvent('message_sent', {
           message_id: newMessage.$id,
-          dialog_id: dialog.$id,
+          dialog_id: dialogId,
           sender_id: senderId,
           receiver_id: receiverId,
           message_type: messageType,
           has_attachment: !!attachment,
-          attachment_type: attachment?.type
+          attachment_type: attachment?.type,
+          media_source: mediaSource,  // Track media source for analytics
+          has_metadata: !!metadata
         }, senderId);
       }
 
@@ -286,7 +299,7 @@ export class MessagingService {
           senderInfo.name || 'Someone',
           messagePreview,
           {
-            dialogId: dialog.$id,
+            dialogId: dialogId,
             messageId: newMessage.$id,
             unreadCount: await this.getUnreadCount(jwtToken, receiverId),
             messageType,
@@ -404,7 +417,7 @@ export class MessagingService {
 
         // Create attachment object
         attachment = {
-        url: this.generatePhotoUrl(key),
+          url: this.generatePhotoUrl(key),
           mimeType: uploadResult.mimeType,
           size: uploadResult.sizeMB,
           type: messageType === 2 ? 'photo' : messageType === 3 ? 'video' : 'audio'
@@ -688,10 +701,10 @@ export class MessagingService {
         process.env.DB_COLLECTION_DIALOGS_ID,
         dialogId
       );
-      return !!document;
+      return document;
     } catch (error) {
       this.log(`[${requestId}] ERROR in checkIfDialogExists: ${error.message}`);
-      return false;
+      throw new Error('Dialog not found');
     }
   }
 
