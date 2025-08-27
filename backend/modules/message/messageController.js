@@ -10,11 +10,11 @@ class MessageController {
 
     try {
       log(`[${requestId}] Send message request started`);
-      const { message, senderId, receiverId, dialogId } = req.body;
+      const { message, senderId, receiverId, dialogId, messageType } = req.body;
 
-      log(`[${requestId}] Request params: message=${message}, senderId=${senderId}, receiverId=${receiverId}, dialogId=${dialogId}, requesterId=${requestedUser.$id}`);
+      log(`[${requestId}] Request params: message=${message}, senderId=${senderId}, receiverId=${receiverId}, dialogId=${dialogId}, messageType=${messageType}, requesterId=${requestedUser.$id}`);
       const appwriteService = new AppwriteService();
-      const newMessage = await appwriteService.sendMessage(jwtToken, senderId, receiverId, message, dialogId);
+      const newMessage = await appwriteService.sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId);
 
       const duration = Date.now() - startTime;
       log(`[${requestId}] Request completed successfully in ${duration}ms`);
@@ -55,12 +55,12 @@ class MessageController {
 
     try {
       log(`[${requestId}] Send direct message request started`);
-      const { message, receiverId } = req.body;
+      const { message, receiverId, messageType } = req.body;
       const senderId = requestedUser.$id;
 
       log(`[${requestId}] Direct message params: message=${message}, senderId=${senderId}, receiverId=${receiverId}, requesterId=${requestedUser.$id}`);
       const appwriteService = new AppwriteService();
-      const newMessage = await appwriteService.sendDirectMessage(jwtToken, senderId, receiverId, message, {});
+      const newMessage = await appwriteService.sendDirectMessage(jwtToken, senderId, receiverId, message, messageType, {});
 
       const duration = Date.now() - startTime;
       log(`[${requestId}] Direct message request completed successfully in ${duration}ms`);

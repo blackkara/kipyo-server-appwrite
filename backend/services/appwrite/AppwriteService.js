@@ -611,8 +611,8 @@ class AppwriteService {
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} - Message result with notification status
    */
-  async sendMessage(jwtToken, senderId, receiverId, message, options = {}) {
-    return this.messagingService.sendMessage(jwtToken, senderId, receiverId, message, options);
+  async sendMessage(jwtToken, senderId, receiverId, message, messageType, options = {}) {
+    return this.messagingService.sendMessage(jwtToken, senderId, receiverId, message, messageType, options);
   }
 
   /**
@@ -624,8 +624,8 @@ class AppwriteService {
    * @param {Object} options - Additional options including quota info
    * @returns {Promise<Object>} - Direct message result with notification status
    */
-  async sendDirectMessage(jwtToken, senderId, receiverId, message, options = {}) {
-    return this.messagingService.sendDirectMessage(jwtToken, senderId, receiverId, message, options);
+  async sendDirectMessage(jwtToken, senderId, receiverId, message, messageType, options = {}) {
+    return this.messagingService.sendDirectMessage(jwtToken, senderId, receiverId, message, messageType, options);
   }
 
   /**

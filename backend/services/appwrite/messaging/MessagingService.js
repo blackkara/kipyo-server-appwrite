@@ -1,5 +1,4 @@
-// src/services/appwrite/messaging/MessagingService.js
-
+import { generateDocumentId } from '#id-generator';
 import { ID, Query } from 'node-appwrite';
 import crypto from 'crypto';
 
@@ -40,12 +39,13 @@ export class MessagingService {
   /**
    * Create a new message document
    */
-  async createMessage(jwtToken, senderId, receiverId, message, conversationId) {
+  async createMessage(jwtToken, senderId, receiverId, message, messageType, conversationId) {
     try {
       const messageData = {
         message: message.trim(),
         senderId,
         receiverId,
+        messageType,
         dialogId: conversationId
       };
 
@@ -68,7 +68,7 @@ export class MessagingService {
   /**
    * Send a regular message between matched/liked users
    */
-  async sendMessage(jwtToken, senderId, receiverId, message, dialogId) {
+  async sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId) {
     const context = {
       methodName: 'sendMessage',
       senderId,
@@ -84,6 +84,10 @@ export class MessagingService {
 
       if (message.length > 5000) {
         throw new Error('Message is too long (max 5000 characters)');
+      }
+
+      if (messageType && ![1, 2, 3, 4].includes(messageType)) {
+        throw new Error('Invalid message type');
       }
 
       const [blockage, dialog] = await Promise.all([
@@ -104,7 +108,7 @@ export class MessagingService {
 
       // Create message and update dialog
       const [newMessage, updatedDialog] = await Promise.all([
-        this.createMessage(jwtToken, senderId, receiverId, message, dialog.$id),
+        this.createMessage(jwtToken, senderId, receiverId, message, messageType, dialog.$id),
         this.updateDialog(jwtToken, dialog.$id, message, senderId, receiverId)
       ]);
 
@@ -167,7 +171,7 @@ export class MessagingService {
   /**
    * Send a direct message (special privilege message without match/like requirement)
    */
-  async sendDirectMessage(jwtToken, senderId, receiverId, message, options = {}) {
+  async sendDirectMessage(jwtToken, senderId, receiverId, message, messageType, options = {}) {
     const context = {
       methodName: 'sendDirectMessage',
       senderId,
@@ -182,6 +186,10 @@ export class MessagingService {
 
       if (message.length > 5000) {
         throw new Error('Direct message is too long (max 5000 characters)');
+      }
+
+      if (messageType && ![1, 2, 3, 4].includes(messageType)) {
+        throw new Error('Invalid message type');
       }
 
       // Check for blockage
@@ -225,7 +233,7 @@ export class MessagingService {
       // Execute all operations in parallel
       const [senderInfo, messageDoc, updatedDialog] = await Promise.all([
         this.getUserInfo(jwtToken, senderId),
-        this.createMessage(jwtToken, senderId, receiverId, message, conversationId),
+        this.createMessage(jwtToken, senderId, receiverId, message, messageType, conversationId),
         this.updateDialog(jwtToken, conversationId, message, senderId, receiverId)
       ]);
 
@@ -397,10 +405,7 @@ export class MessagingService {
       }
 
       // Create new direct dialog using admin privileges
-      const combined = occupants.join('_');
-      const hash = crypto.createHash('sha256').update(combined).digest('hex');
-      const dialogId = `direct_${hash.substring(0, 20)}`;
-
+      const dialogId = generateDocumentId('dialog', senderId, receiverId);
       const newDialog = await this.adminOps.upsertDocumentWithAdminPrivileges(
         jwtToken,
         senderId,
