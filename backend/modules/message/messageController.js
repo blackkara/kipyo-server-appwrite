@@ -1,4 +1,3 @@
-import messageService from './messageService.js';
 import AppwriteService from '../../services/appwrite/AppwriteService.js';
 
 class MessageController {
@@ -10,11 +9,11 @@ class MessageController {
 
     try {
       log(`[${requestId}] Send message request started`);
-      const { message, senderId, receiverId, dialogId, messageType } = req.body;
+      const { message, senderId, receiverId, dialogId, messageType, imageBase64 } = req.body;
 
       log(`[${requestId}] Request params: message=${message}, senderId=${senderId}, receiverId=${receiverId}, dialogId=${dialogId}, messageType=${messageType}, requesterId=${requestedUser.$id}`);
       const appwriteService = new AppwriteService();
-      const newMessage = await appwriteService.sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId);
+      const newMessage = await appwriteService.sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64);
 
       const duration = Date.now() - startTime;
       log(`[${requestId}] Request completed successfully in ${duration}ms`);

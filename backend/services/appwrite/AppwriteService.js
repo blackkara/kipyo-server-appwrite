@@ -608,11 +608,13 @@ class AppwriteService {
    * @param {string} senderId - Sender user ID
    * @param {string} receiverId - Receiver user ID
    * @param {string} message - Message content
-   * @param {Object} options - Additional options
+   * @param {number} messageType - Message type (1=text, 2=photo, 3=video, 4=audio)
+   * @param {string} dialogId - Dialog ID
+   * @param {string} imageBase64 - Base64 encoded media data (required for messageType 2,3,4)
    * @returns {Promise<Object>} - Message result with notification status
    */
-  async sendMessage(jwtToken, senderId, receiverId, message, messageType, options = {}) {
-    return this.messagingService.sendMessage(jwtToken, senderId, receiverId, message, messageType, options);
+  async sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64 = null) {
+    return this.messagingService.sendMessage(jwtToken, senderId, receiverId, message, messageType, dialogId, imageBase64);
   }
 
   /**
@@ -620,12 +622,13 @@ class AppwriteService {
    * @param {string} jwtToken - User JWT token
    * @param {string} senderId - Sender user ID
    * @param {string} receiverId - Receiver user ID
-   * @param {string} message - Message content
-   * @param {Object} options - Additional options including quota info
-   * @returns {Promise<Object>} - Direct message result with notification status
+   * @param {string} message - Message content or caption for media
+   * @param {number} messageType - Message type (1=text, 2=photo, 3=video, 4=audio)
+   * @param {string} imageBase64 - Base64 encoded media data (required for messageType 2,3,4)
+   * @returns {Promise<Object>} - Direct message result with notification status and attachment info
    */
-  async sendDirectMessage(jwtToken, senderId, receiverId, message, messageType, options = {}) {
-    return this.messagingService.sendDirectMessage(jwtToken, senderId, receiverId, message, messageType, options);
+  async sendDirectMessage(jwtToken, senderId, receiverId, message, messageType, imageBase64 = null) {
+    return this.messagingService.sendDirectMessage(jwtToken, senderId, receiverId, message, messageType, imageBase64);
   }
 
   /**
