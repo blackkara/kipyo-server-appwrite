@@ -122,14 +122,15 @@ class DialogController {
 
     try {
       log(`[${requestId}] Delete dialog request started`);
-      const { occupantId } = req.body;
+      const { occupantId, blockAlso } = req.body;
 
-      log(`[${requestId}] Request params: occupantId=${occupantId}, requesterId=${requestedUser.$id}`);
+      log(`[${requestId}] Request params: occupantId=${occupantId}, blockAlso=${blockAlso}, requesterId=${requestedUser.$id}`);
 
       const result = await dialogService.deleteDialog(
         jwtToken,
         occupantId,
         requestedUser.$id,
+        blockAlso,
         requestId,
         log
       );

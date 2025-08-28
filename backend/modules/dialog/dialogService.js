@@ -370,7 +370,7 @@ class DialogService {
    * NOT: Hangi kayıtların var olduğu önemli değil, bulduklarını siler
    * 404 hataları yoksayılır
    */
-  async deleteDialog(jwtToken, occupantId, requestedUserId, requestId, log) {
+  async deleteDialog(jwtToken, occupantId, requestedUserId, blockAlso, requestId, log) {
     try {
       const startTime = Date.now();
       log(`[${requestId}] Removing all relations between ${requestedUserId} and ${occupantId}`);
@@ -382,13 +382,14 @@ class DialogService {
         like: generateDocumentId('like', requestedUserId, occupantId),
         reverseLike: generateDocumentId('like', occupantId, requestedUserId),
         match: generateDocumentId('match', requestedUserId, occupantId),
-        dialog: generateDocumentId('dialog', requestedUserId, occupantId)
+        dialog: generateDocumentId('dialog', requestedUserId, occupantId),
+        block: generateDocumentId('block', requestedUserId, occupantId)
       };
 
       log(`[${requestId}] Attempting to delete:`, ids);
 
-      // ✅ Promise.allSettled = HİÇBİRİ DİĞERİNİ ENGELLEMEZ!
-      const deletions = await Promise.allSettled([
+      // Build deletion promises array
+      const deletionPromises = [
         // Like: user1 → user2
         appwriteService.deleteDocumentWithAdminPrivileges(
           jwtToken,
@@ -429,33 +430,107 @@ class DialogService {
           if (err.code !== 404) log(`[${requestId}] Dialog deletion error: ${err.message}`);
           return { deleted: false, type: 'dialog', error: err.code };
         })
-      ]);
+      ];
+
+      // Add block creation if blockAlso is true
+      if (blockAlso === true) {
+        log(`[${requestId}] Block also requested, checking if block already exists`);
+
+        deletionPromises.push(
+          // First check if block already exists
+          appwriteService.getDocument(
+            jwtToken,
+            process.env.DB_COLLECTION_BLOCKS_ID,
+            ids.block
+          ).then(existingBlock => {
+            // Block already exists
+            log(`[${requestId}] Block already exists: ${ids.block}`);
+            return { created: false, type: 'block', id: ids.block, reason: 'already_exists' };
+          }).catch(err => {
+            // Block doesn't exist (404), create it
+            if (err.code === 404 || err.message?.includes('not found')) {
+              log(`[${requestId}] Block not found, creating new block: ${ids.block}`);
+
+              return appwriteService.createDocumentWithAdminPrivileges(
+                jwtToken,
+                requestedUserId,
+                process.env.DB_COLLECTION_BLOCKS_ID,
+                ids.block,
+                {
+                  blockerId: requestedUserId,
+                  blockedId: occupantId,
+                  blockedProfile: occupantId
+                },
+                [
+                  { userId: occupantId, permissions: ['read'] }
+                ]
+              ).then(result => {
+                log(`[${requestId}] Block created successfully: ${ids.block}`);
+                return { created: true, type: 'block', id: ids.block };
+              }).catch(createErr => {
+                // Handle potential race condition - another request might have created it
+                if (createErr.code === 409 || createErr.message?.includes('already exists')) {
+                  log(`[${requestId}] Block created by another request (race condition): ${ids.block}`);
+                  return { created: false, type: 'block', id: ids.block, reason: 'race_condition' };
+                }
+
+                log(`[${requestId}] Block creation error: ${createErr.message}`);
+                return { created: false, type: 'block', error: createErr.message };
+              });
+            } else {
+              // Other error (network, auth, etc.)
+              log(`[${requestId}] Block check error: ${err.message}`);
+              return { created: false, type: 'block', error: err.message };
+            }
+          })
+        );
+      }
+
+      // ✅ Promise.allSettled = HİÇBİRİ DİĞERİNİ ENGELLEMEZ!
+      const deletions = await Promise.allSettled(deletionPromises);
 
       // Analyze results
       const summary = {
         deletedCount: 0,
         deleted: [],
         notFound: [],
-        errors: []
+        errors: [],
+        blockCreated: false
       };
 
       const types = ['like', 'reverseLike', 'match', 'dialog'];
+      // Add 'block' type if blockAlso was true
+      if (blockAlso === true) {
+        types.push('block');
+      }
 
       deletions.forEach((result, index) => {
         const type = types[index];
 
         if (result.status === 'fulfilled') {
-          if (result.value?.deleted === false) {
-            // Deletion failed
-            if (result.value.error === 404) {
-              summary.notFound.push(type);
-            } else {
-              summary.errors.push({ type, error: result.value.error });
+          // Handle block creation separately
+          if (type === 'block') {
+            if (result.value?.created === true) {
+              summary.blockCreated = true;
+              log(`[${requestId}] Block successfully created`);
+            } else if (result.value?.created === false) {
+              summary.errors.push({ type: 'block', error: result.value.error });
+              log(`[${requestId}] Block creation failed: ${result.value.error}`);
             }
           } else {
-            // Successfully deleted
-            summary.deleted.push(type);
-            summary.deletedCount++;
+            // Handle deletion results
+            if (result.value?.deleted === false) {
+              // Deletion failed
+              if (result.value.error === 404) {
+                summary.notFound.push(type);
+              } else {
+                summary.errors.push({ type, error: result.value.error });
+              }
+            } else {
+              // Successfully deleted
+              summary.deleted.push(type);
+              summary.deletedCount++;
+            }
           }
         } else {
           // Promise rejected (shouldn't happen with our catch blocks)
@@ -468,23 +543,26 @@ class DialogService {
       log(`[${requestId}] Unmatch completed in ${duration}ms:`, {
         deleted: summary.deleted,
         notFound: summary.notFound,
-        errors: summary.errors
+        errors: summary.errors,
+        blockCreated: summary.blockCreated
       });
 
       // ✅ EN AZ BİR KAYIT SİLİNDİYSE BAŞARILI!
       // Dialog-only case için bile çalışır
-      const success = summary.deletedCount > 0;
+      const success = summary.deletedCount > 0 || summary.blockCreated;
 
       return {
         success,
         message: success
-          ? `Removed ${summary.deletedCount} relation(s) between users`
+          ? `Removed ${summary.deletedCount} relation(s) between users${summary.blockCreated ? ' and blocked user' : ''}`
           : 'No relations found between users',
         deletedCount: summary.deletedCount,
+        blockCreated: summary.blockCreated,
         details: {
           deleted: summary.deleted,
           notFound: summary.notFound,
-          hasErrors: summary.errors.length > 0
+          hasErrors: summary.errors.length > 0,
+          blockCreated: summary.blockCreated
         },
         duration
       };
