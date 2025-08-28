@@ -141,10 +141,11 @@ export class MessagingService {
         this.messagesCollection,
         ID.unique(),
         messageData,
-        [{ userId: receiverId, permissions: ['read'] }]
+        [
+          { userId: receiverId, permissions: ['read'] },
+          { userId: senderId, permissions: ['read', 'update', 'delete', 'write'] }
+        ]
       );
-
-
       this.log(`Message created: ${newMessage.$id}`);
       return newMessage;
 
@@ -543,7 +544,10 @@ export class MessagingService {
           lastMessage: message,
           lastMessageSenderId: senderId
         },
-        [{ userId: receiverId, permissions: ['read'] }]
+        [
+          { userId: receiverId, permissions: ['read', 'update', 'delete', 'write'] },
+          { userId: senderId, permissions: ['read', 'update', 'delete', 'write'] }
+        ]
       );
 
       this.log(`Dialog updated successfully with ID: ${updatedDialog.$id}`);

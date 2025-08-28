@@ -442,7 +442,8 @@ class InteractionService {
           'createDate': new Date().toISOString()
         },
         [
-          { userId: userId2, permissions: ['read', 'update', 'delete', 'write'] }
+          { userId: occupantsPair[0], permissions: ['read', 'update', 'delete', 'write'] },
+          { userId: occupantsPair[1], permissions: ['read', 'update', 'delete', 'write'] }
         ]
       );
 
@@ -506,7 +507,8 @@ class InteractionService {
           'matchId': matchId
         },
         [
-          { userId: receiverId, permissions: ['write', 'read', 'update', 'delete'] }
+          { userId: receiverId, permissions: ['write', 'read', 'update', 'delete'] },
+          { userId: requestingUserId, permissions: ['write', 'read', 'update', 'delete'] }
         ]
       );
 
@@ -930,7 +932,7 @@ class InteractionService {
 
       log(`[${requestId}] Starting like operation: ${senderId} -> ${receiverId}`);
 
-   
+
 
       // ===============================================
       // 4️⃣ PARALLEL QUERIES (Optimized)
@@ -964,7 +966,7 @@ class InteractionService {
       // 5️⃣ EARLY RETURN - Already Matched
       // ===============================================
       if (existingMatch) {
-      
+
         log(`[${requestId}] Already matched`);
         return {
           action: 'already_matched',
@@ -1040,7 +1042,7 @@ class InteractionService {
               likedRef: receiverId,
               expireDate: expirationDate.toISOString(),
               matchId: null
-            
+
             },
             [
               { userId: senderId, permissions: ['read', 'update', 'delete'] },
@@ -1136,7 +1138,7 @@ class InteractionService {
               log(`[${requestId}] ERROR creating dialog: ${dialogError.message}`);
             }
           }
-          
+
           // Send notifications asynchronously (non-blocking)
           this.sendMatchNotificationAsync(senderId, receiverId, matchId, requestId, log);
 

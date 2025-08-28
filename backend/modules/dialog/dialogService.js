@@ -128,8 +128,8 @@ class DialogService {
           'isDirect': true,
         },
         [
-          { userId: occupants[0], permissions: ['read'] },
-          { userId: occupants[1], permissions: ['read'] }
+          { userId: occupants[0], permissions: ['write', 'read', 'update', 'delete'] },
+          { userId: occupants[1], permissions: ['write', 'read', 'update', 'delete'] }
         ]
       );
 
@@ -493,6 +493,46 @@ class DialogService {
       log(`[${requestId}] UNEXPECTED ERROR in unmatchUsers: ${error.message}`);
       // Unexpected error (network, auth, etc.)
       throw new Error(`Failed to unmatch users: ${error.message}`);
+    }
+  }
+
+
+  async allowMedia(jwtToken, requestingUserId, dialogId, allowed, requestId, log) {
+    try {
+      const operationStart = Date.now();
+      const appwriteService = AppwriteService.getInstance();
+
+      const dialog = await appwriteService.getDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_DIALOGS_ID,
+        dialogId
+      );
+
+      let mediaAllowedIds = dialog.mediaAllowedIds || [];
+      if (allowed) {
+        if (!mediaAllowedIds.includes(requestingUserId)) {
+          mediaAllowedIds.push(requestingUserId);
+        }
+      } else {
+        mediaAllowedIds = mediaAllowedIds.filter(id => id !== requestingUserId);
+      }
+
+      const occupantId = dialog.occupantIds.find(id => id !== requestingUserId);
+      const result = await appwriteService.updateDocumentWithAdminPrivileges(
+        jwtToken,
+        requestingUserId,
+        process.env.DB_COLLECTION_DIALOGS_ID,
+        dialogId,
+        { mediaAllowedIds: mediaAllowedIds },
+        [{ userId: occupantId, permissions: ['write', 'read', 'update', 'delete'] }]
+      );
+
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] ${allowed ? 'Allow' : 'Disallow'} media operation completed in ${operationDuration}ms`);
+      return result;
+    } catch (error) {
+      log(`[${requestId}] ERROR in allowMedia: ${error.message}`);
+      throw new Error(`Failed to ${allowed ? 'allow' : 'disallow'} media: ${error.message}`);
     }
   }
 
