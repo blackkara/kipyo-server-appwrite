@@ -240,6 +240,149 @@ export class TranslateService {
     }, context, jwtToken);
   }
 
+  async translateAbout(jwtToken, requestedUserId, userId, targetLanguage, options = {}) {
+    const context = {
+      methodName: 'translateAbout',
+      userId,
+      targetLanguage,
+      timestamp: new Date().toISOString()
+    };
+
+    return this.executeTranslation(async () => {
+      // Get the original message from database first
+      const profile = await this.documentOps.getDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILES_ID,
+        userId
+      );
+
+      if (!profile) {
+        throw new Error('Profile not found');
+      }
+
+      // Check and consume translation quota
+      if (this.quotaManager) {
+        const quotaResult = await this.quotaManager.checkAndConsumeQuota(
+          jwtToken,
+          requestedUserId,
+          'TRANSLATE',
+          1 
+        );
+
+        if (!quotaResult.success) {
+          return {
+            success: false,
+            error: 'QUOTA_EXCEEDED',
+            message: quotaResult.message,
+            quotaInfo: {
+              remaining: quotaResult.remaining,
+              dailyLimit: quotaResult.dailyLimit,
+              nextResetAt: quotaResult.nextResetAt,
+              nextResetIn: quotaResult.nextResetIn
+            }
+          };
+        }
+      }
+
+      // Validate target language
+      if (!this.isLanguageSupported(targetLanguage)) {
+        throw new Error(`Language ${targetLanguage} is not supported`);
+      }
+
+      // Check if already translated to this language
+      // if (message.about) {
+      //   this.log(`Message ${messageId} already translated to ${targetLanguage}`);
+
+      //   const quotaStatus = await this.getQuotaStatus(jwtToken, requestedUserId);
+
+      //   return {
+      //     success: true,
+      //     messageId,
+      //     originalText: message.message,
+      //     translatedText: message.translatedBody,
+      //     targetLanguage: message.translatedLanguage,
+      //     cached: true,
+      //     quotaInfo: quotaStatus
+      //   };
+      // }
+
+      // Check cache first
+      // const cacheKey = this.getCacheKey(message.message, targetLanguage);
+      // const cachedTranslation = this.translationCache.get(cacheKey);
+
+      // if (cachedTranslation && !options.forceRefresh) {
+      //   this.stats.cachedResponses++;
+
+      //   // Update message with cached translation
+      //   await this.updateMessageTranslation(
+      //     jwtToken,
+      //     messageId,
+      //     cachedTranslation.translatedText,
+      //     targetLanguage
+      //   );
+
+      //   const quotaStatus = await this.getQuotaStatus(jwtToken, requestedUserId);
+
+      //   return {
+      //     success: true,
+      //     messageId,
+      //     originalText: message.message,
+      //     translatedText: cachedTranslation.translatedText,
+      //     targetLanguage,
+      //     cached: true,
+      //     quotaInfo: quotaStatus
+      //   };
+      // }
+
+      // Perform translation
+      const translatedText = await this.performTranslation(
+        profile.about,
+        targetLanguage,
+        options.sourceLanguage
+      );
+
+      // Cache the translation
+     // this.cacheTranslation(message.message, targetLanguage, translatedText);
+
+      // Update message in database
+      // await this.updateMessageTranslation(
+      //   jwtToken,
+      //   messageId,
+      //   translatedText,
+      //   targetLanguage
+      // );
+
+      // Track event
+      await this.trackTranslationEvent(
+        TRANSLATION_EVENTS.MESSAGE_TRANSLATED,
+        {
+          profile_id: profile.$id,
+          target_language: targetLanguage,
+          original_length: profile.about.length,
+          translated_length: translatedText.length
+        },
+        requestedUserId
+      );
+
+      // Update statistics
+      this.updateStatistics(targetLanguage);
+
+      const quotaStatus = await this.getQuotaStatus(jwtToken, requestedUserId);
+
+      return {
+        success: true,
+        userId: profile.$id,
+        originalText: profile.about,
+        translatedText,
+        targetLanguage,
+        cached: false,
+        quotaInfo: quotaStatus
+      };
+
+    }, context, jwtToken);
+  }
+
+
   /**
    * Translate multiple messages
    * @param {string} jwtToken - User JWT token
@@ -432,7 +575,7 @@ export class TranslateService {
     // This allows us to update messages created by any user
     const databases = this.clientManager.getAdminDatabases();
     const databaseId = process.env.APPWRITE_DB_ID;
-    
+
     return databases.updateDocument(
       databaseId,
       process.env.DB_COLLECTION_MESSAGES_ID,

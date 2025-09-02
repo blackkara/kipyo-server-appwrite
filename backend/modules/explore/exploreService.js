@@ -6,6 +6,68 @@ const Query = createQuery();
 
 class ExploreService {
 
+  // Geohash'ten yaklaşık koordinat çıkarma
+  decodeGeohash(geohash) {
+    const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+    let minLat = -90, maxLat = 90;
+    let minLon = -180, maxLon = 180;
+    let isEven = true;
+
+    for (let i = 0; i < geohash.length; i++) {
+      const idx = BASE32.indexOf(geohash[i]);
+      for (let j = 4; j >= 0; j--) {
+        const bit = (idx >> j) & 1;
+        if (isEven) {
+          const mid = (minLon + maxLon) / 2;
+          if (bit === 1) {
+            minLon = mid;
+          } else {
+            maxLon = mid;
+          }
+        } else {
+          const mid = (minLat + maxLat) / 2;
+          if (bit === 1) {
+            minLat = mid;
+          } else {
+            maxLat = mid;
+          }
+        }
+        isEven = !isEven;
+      }
+    }
+
+    return {
+      lat: (minLat + maxLat) / 2,
+      lon: (minLon + maxLon) / 2
+    };
+  }
+
+  // Haversine formülü ile iki nokta arası mesafe (km)
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Dünya yarıçapı km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return Math.round(R * c); // km cinsinden tam sayı
+  }
+
+  // Geohash'ler arası mesafe hesaplama
+  calculateDistanceFromGeohashes(geohash1, geohash2) {
+    if (!geohash1 || !geohash2) return null;
+    
+    try {
+      const coord1 = this.decodeGeohash(geohash1);
+      const coord2 = this.decodeGeohash(geohash2);
+      return this.calculateDistance(coord1.lat, coord1.lon, coord2.lat, coord2.lon);
+    } catch (error) {
+      return null;
+    }
+  }
+
   async getSwipeCards(requestingUser, jwtToken, filters, requestId, log, options = {}) {
     try {
       const operationStart = Date.now();
@@ -35,6 +97,16 @@ class ExploreService {
       // Sadece istenen exclusion sorgularını hazırla
       const queries = [];
       const queryNames = [];
+
+      // Kullanıcının kendi profilini çek (geohash için)
+      queries.push(
+        appwriteService.getDocument(
+          jwtToken,
+          process.env.DB_COLLECTION_PROFILES_ID,
+          userId // userId direkt document ID olarak kullanılıyor
+        )
+      );
+      queryNames.push('userProfile');
 
       if (includeMatches) {
         queries.push(
@@ -103,11 +175,19 @@ class ExploreService {
       // Sonuçları organize et
       const exclusionData = {};
       const exclusionSummary = {};
+      let userGeohash = null; // Kullanıcının geohash'i
 
       exclusionResults.forEach((result, index) => {
         const queryName = queryNames[index];
-        exclusionData[queryName] = result.documents;
-        exclusionSummary[`${queryName}Count`] = result.total;
+        
+        // Kullanıcı profili ise geohash'i al
+        if (queryName === 'userProfile') {
+          userGeohash = result.geohash;
+          log(`[${requestId}] User geohash: ${userGeohash ? 'found' : 'not found'}`);
+        } else {
+          exclusionData[queryName] = result.documents;
+          exclusionSummary[`${queryName}Count`] = result.total;
+        }
       });
 
       // Exclusion ID'lerini çıkar
@@ -148,7 +228,9 @@ class ExploreService {
       // Exclusion sonuçlarını logla
       log(`[${requestId}] Exclusion query results:`);
       queryNames.forEach(queryName => {
-        log(`[${requestId}] - ${queryName}: ${exclusionSummary[`${queryName}Count`]}`);
+        if (queryName !== 'userProfile') { // userProfile'ı exclusion log'larında gösterme
+          log(`[${requestId}] - ${queryName}: ${exclusionSummary[`${queryName}Count`]}`);
+        }
       });
       log(`[${requestId}] Exclusions fetched in ${exclusionQueryDuration}ms, total excluded: ${excludedUserIds.length}`);
 
@@ -210,7 +292,8 @@ class ExploreService {
         jwtToken,
         documents.documents,
         requestId,
-        log
+        log,
+        userGeohash // Kullanıcının geohash'ini pass et
       );
       const enrichmentDuration = Date.now() - enrichmentStart;
 
@@ -236,7 +319,7 @@ class ExploreService {
   }
 
 
-  async enrichSwipeCards(jwtToken, profileDocuments, requestId, log) {
+  async enrichSwipeCards(jwtToken, profileDocuments, requestId, log, userGeohash = null) {
     try {
       const profileIds = profileDocuments.map(doc => doc.$id);
 
@@ -260,12 +343,19 @@ class ExploreService {
         const photoKeys = profile.photos || [];
         const photosWithUrl = generatePhotoUrls(photoKeys);
 
+        // Mesafe hesapla (eğer her iki tarafta da geohash varsa)
+        let distanceKm = null;
+        if (userGeohash && profile.geohash) {
+          distanceKm = this.calculateDistanceFromGeohashes(userGeohash, profile.geohash);
+        }
+
         // Sadece gerekli data'yı attach et
         return {
           ...profile,
           photosWithUrl,
           medias: mediaByUserId[userId] || [],
-          preferences: preferencesByUserId[userId] || null
+          preferences: preferencesByUserId[userId] || null,
+          distanceKm // Mesafe bilgisini ekle (null olabilir)
         };
       });
 

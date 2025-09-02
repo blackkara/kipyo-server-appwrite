@@ -54,4 +54,8 @@ router.patch('/profile/habits', (req, res) => {
   profileController.updateHabits(req, res);
 });
 
+router.patch('/profile/location', (req, res) => {
+  profileController.updateLocation(req, res);
+});
+
 export default router;

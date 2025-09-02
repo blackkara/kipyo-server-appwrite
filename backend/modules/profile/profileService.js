@@ -222,7 +222,7 @@ class ProfileService {
     };
   }
 
- 
+
   async deletePhoto(jwtToken, userId, photoKey, requestId, log) {
     try {
       const operationStart = Date.now();
@@ -1342,6 +1342,38 @@ class ProfileService {
       });
       result.operationDuration = Date.now() - operationStart;
       return result;
+    }
+  }
+
+  async updateLocation(jwtToken, userId, geohash, latitude, longitude, requestId, log) {
+    try {
+      const operationStart = Date.now();
+      log(`[${requestId}] Starting location update`);
+
+      const appwriteService = AppwriteService.getInstance();
+
+      // For now omit latitude and longitude
+      const updateData = { geohash: geohash };
+
+      const updatedProfile = await appwriteService.updateDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILES_ID,
+        userId,
+        updateData
+      );
+
+      const operationDuration = Date.now() - operationStart;
+      log(`[${requestId}] Location updated successfully in ${operationDuration}ms`);
+
+      return {
+        userId,
+        geohash,
+        operationDuration
+      };
+
+    } catch (error) {
+      log(`[${requestId}] ERROR in updateLocation: ${error.message}`);
+      throw new AppError(ERROR_CODES.PROFILE_UPDATE_FAILED, error.message, error);
     }
   }
 }

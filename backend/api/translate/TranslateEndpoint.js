@@ -61,6 +61,59 @@ router.post('/message', authenticateUser, async (req, res) => {
   }
 });
 
+router.post('/about', authenticateUser, async (req, res) => {
+  const { userId, targetLanguage, forceRefresh = false } = req.body;
+  const { jwtToken, requestedUser, requestId, log, error } = req;
+  const startTime = Date.now();
+
+  try {
+    // Validate input
+    if (!userId || !targetLanguage) {
+      return res.status(400).json({
+        success: false,
+        code: 400,
+        message: 'userId and targetLanguage are required',
+        requestId
+      });
+    }
+
+    // Get AppwriteService instance
+    const appwriteService = AppwriteService.getInstance();
+
+    // Translate about section
+    const result = await appwriteService.translateAbout(
+      jwtToken,
+      requestedUser.$id,
+      userId,
+      targetLanguage.toLowerCase(),
+      { forceRefresh }
+    );
+
+    const duration = Date.now() - startTime;
+    log(`User ${userId} about section translated to ${targetLanguage} in ${duration}ms`);
+
+    return res.status(200).json({
+      success: true,
+      code: 200,
+      data: result,
+      requestId,
+      duration
+    });
+
+  } catch (err) {
+    const duration = Date.now() - startTime;
+    error(`Translation failed: ${err.message}`, err);
+
+    return res.status(500).json({
+      success: false,
+      code: 500,
+      message: err.message,
+      requestId,
+      duration
+    });
+  }
+});
+
 /**
  * Translate multiple messages
  * POST /api/translate/batch

@@ -546,6 +546,10 @@ class AppwriteService {
     return this.translateService.translateMessage(jwtToken, messageId, targetLanguage, options);
   }
 
+  async translateAbout(jwtToken, userId, targetLanguage, options = {}) {
+    return this.translateService.translateAbout(jwtToken, userId, targetLanguage, options);
+  }
+
   async translateBatch(jwtToken, messageIds, targetLanguage) {
     return this.translateService.translateBatch(jwtToken, messageIds, targetLanguage);
   }

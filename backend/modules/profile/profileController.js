@@ -608,48 +608,90 @@ class ProfileController {
 
   // profileController.js'e eklenecek/düzeltilecek metod
 
-async updateHabits(req, res) {
-  const { startTime, requestId, jwtToken, requestedUser } = req;
-  const log = (message) => console.log(message);
+  async updateHabits(req, res) {
+    const { startTime, requestId, jwtToken, requestedUser } = req;
+    const log = (message) => console.log(message);
 
-  try {
-    log(`[${requestId}] updateHabits request started`);
-    
-    const { habits } = req.body;
-    
-    if (!habits || !Array.isArray(habits)) {
-      throw new AppError(ERROR_CODES.INVALID_PARAMETER_TYPE, 'habits must be an array');
+    try {
+      log(`[${requestId}] updateHabits request started`);
+
+      const { habits } = req.body;
+
+      if (!habits || !Array.isArray(habits)) {
+        throw new AppError(ERROR_CODES.INVALID_PARAMETER_TYPE, 'habits must be an array');
+      }
+
+      if (habits.length > 10) {
+        throw new AppError(ERROR_CODES.PARAMETER_COUNT_EXCEEDED, 'habits cannot exceed 10 items');
+      }
+
+      // profileService.updateHabits metodunu çağır
+      const result = await profileService.updateHabits(
+        jwtToken,
+        requestedUser.$id,
+        habits,
+        requestId,
+        log
+      );
+
+      const duration = Date.now() - startTime;
+      log(`[${requestId}] updateHabits completed successfully in ${duration}ms`);
+
+      return res.status(200).json({
+        success: true,
+        code: 200,
+        message: 'Habits updated successfully',
+        data: result,
+        requestId: requestId,
+        duration: duration
+      });
+
+    } catch (error) {
+      return ErrorHandler.handleControllerError(error, res, requestId, startTime);
     }
-    
-    if (habits.length > 10) {
-      throw new AppError(ERROR_CODES.PARAMETER_COUNT_EXCEEDED, 'habits cannot exceed 10 items');
-    }
-
-    // profileService.updateHabits metodunu çağır
-    const result = await profileService.updateHabits(
-      jwtToken,
-      requestedUser.$id,
-      habits,
-      requestId,
-      log
-    );
-
-    const duration = Date.now() - startTime;
-    log(`[${requestId}] updateHabits completed successfully in ${duration}ms`);
-
-    return res.status(200).json({
-      success: true,
-      code: 200,
-      message: 'Habits updated successfully',
-      data: result,
-      requestId: requestId,
-      duration: duration
-    });
-
-  } catch (error) {
-    return ErrorHandler.handleControllerError(error, res, requestId, startTime);
   }
-}
+
+  async updateLocation(req, res) {
+    const { startTime, requestId, jwtToken, requestedUser } = req;
+    const log = (message) => console.log(message);
+
+    try {
+      log(`[${requestId}] updateLocation request started`);
+
+      const { geohash, latitude, longitude } = req.body;
+
+      if (!geohash || !latitude || !longitude) {
+        throw new AppError(ERROR_CODES.REQUIRED_PARAMETER_MISSING, 'geohash, latitude and longitude are required');
+      }
+
+
+      // profileService.updateLocation metodunu çağır
+      const result = await profileService.updateLocation(
+        jwtToken,
+        requestedUser.$id,
+        geohash,
+        latitude,
+        longitude,
+        requestId,
+        log
+      );
+
+      const duration = Date.now() - startTime;
+      log(`[${requestId}] updateLocation completed successfully in ${duration}ms`);
+
+      return res.status(200).json({
+        success: true,
+        code: 200,
+        message: 'Location updated successfully',
+        data: result,
+        requestId: requestId,
+        duration: duration
+      });
+
+    } catch (error) {
+      return ErrorHandler.handleControllerError(error, res, requestId, startTime);
+    }
+  }
 }
 
 export default new ProfileController();
