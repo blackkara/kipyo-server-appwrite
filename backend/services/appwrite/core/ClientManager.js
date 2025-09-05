@@ -1,6 +1,6 @@
 // src/services/appwrite/core/ClientManager.js
 
-import { Client, Databases, Account } from 'node-appwrite';
+import { Client, Databases, Account, Users } from 'node-appwrite';
 
 /**
  * Manages Appwrite client creation and lifecycle
@@ -15,6 +15,7 @@ export class ClientManager {
     // Admin client singleton
     this.adminClient = null;
     this.adminDatabases = null;
+    this.adminUsers = null;
   }
 
   /**
@@ -222,6 +223,56 @@ export class ClientManager {
       return this.adminDatabases;
     } catch (error) {
       this.log('Failed to get admin databases:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get admin Users instance
+   * @returns {Users} - Admin users instance
+   */
+  getAdminUsers() {
+    const context = { methodName: 'getAdminUsers' };
+
+    try {
+      const apiKey = this.config ? 
+        this.config.get('appwrite.apiKey') : 
+        process.env.APPWRITE_DEV_KEY;
+
+      if (!apiKey) {
+        throw new Error('APPWRITE_DEV_KEY is not configured');
+      }
+
+      // Check if adminUsers already exists and return it
+      if (this.adminUsers) {
+        return this.adminUsers;
+      }
+
+      // If not, create admin client if needed
+      if (!this.adminClient) {
+        const endpoint = this.config ? 
+          this.config.get('appwrite.endpoint') : 
+          process.env.APPWRITE_END_POINT;
+          
+        const projectId = this.config ? 
+          this.config.get('appwrite.projectId') : 
+          process.env.APPWRITE_PROJECT_ID;
+
+        this.adminClient = new Client()
+          .setEndpoint(endpoint)
+          .setProject(projectId)
+          .setKey(apiKey);
+        
+        this.log('Admin client created');
+      }
+      
+      // Now create adminUsers
+      this.adminUsers = new Users(this.adminClient);
+      this.log('Admin users instance created');
+
+      return this.adminUsers;
+    } catch (error) {
+      this.log('Failed to get admin users:', error.message);
       throw error;
     }
   }

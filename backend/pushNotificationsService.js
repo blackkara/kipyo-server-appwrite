@@ -1,15 +1,35 @@
 import { Client, Messaging } from 'node-appwrite';
+import AppwriteService from './services/appwrite/AppwriteService.js';
 
+/**
+ * Legacy PushNotificationService
+ * Now acts as a wrapper around the new AppwriteService notification system
+ * Maintained for backward compatibility
+ */
 class PushNotificationService {
   constructor() {
-    this.client = new Client()
-      .setEndpoint(process.env.APPWRITE_END_POINT)
-      .setProject(process.env.APPWRITE_PROJECT_ID)
-      .setKey(process.env.APPWRITE_DEV_KEY);
-    this.messaging = new Messaging(this.client);
+    // Try to use AppwriteService if available
+    try {
+      this.appwriteService = AppwriteService.getInstance();
+      this.useAppwriteService = true;
+    } catch (e) {
+      // Fallback to direct Messaging client if AppwriteService not available
+      this.useAppwriteService = false;
+      this.client = new Client()
+        .setEndpoint(process.env.APPWRITE_END_POINT)
+        .setProject(process.env.APPWRITE_PROJECT_ID)
+        .setKey(process.env.APPWRITE_DEV_KEY);
+      this.messaging = new Messaging(this.client);
+    }
   }
 
   async sendToUsers(title, body, userIds, data = {}, options = {}) {
+    // Use new AppwriteService if available
+    if (this.useAppwriteService) {
+      return this.appwriteService.sendNotification(title, body, userIds, data, options);
+    }
+    
+    // Fallback to direct messaging
     try {
       const messageId = options.messageId || 'unique()';
       const notification = await this.messaging.createPush(
@@ -39,6 +59,12 @@ class PushNotificationService {
    * Send notification for match event
    */
   async sendMatchNotification(userId1, userId2, matchData) {
+    // Use new AppwriteService if available
+    if (this.useAppwriteService) {
+      return this.appwriteService.sendMatchNotification(userId1, userId2, matchData);
+    }
+    
+    // Fallback to old implementation
     const title = "It's a Match! 🎉";
     const body = "You have a new match! Start chatting now.";
 
@@ -59,6 +85,12 @@ class PushNotificationService {
    * Send notification for new like
    */
   async sendLikeNotification(likerId, likedId, likerName) {
+    // Use new AppwriteService if available
+    if (this.useAppwriteService) {
+      return this.appwriteService.sendLikeNotification(likerId, likedId, likerName);
+    }
+    
+    // Fallback to old implementation
     const title = "New Like ❤️";
     const body = `${likerName} liked your profile!`;
 
@@ -74,6 +106,12 @@ class PushNotificationService {
    * Send notification for new message
    */
   async sendMessageNotification(senderId, receiverId, senderName, messagePreview) {
+    // Use new AppwriteService if available
+    if (this.useAppwriteService) {
+      return this.appwriteService.sendMessageNotification(senderId, receiverId, senderName, messagePreview);
+    }
+    
+    // Fallback to old implementation
     const title = `New message from ${senderName}`;
     const body = messagePreview;
 
@@ -90,6 +128,12 @@ class PushNotificationService {
    * Send notification to topics (broadcast)
    */
   async sendToTopic(topic, title, body, data = {}, options = {}) {
+    // Use new AppwriteService if available
+    if (this.useAppwriteService) {
+      return this.appwriteService.sendTopicNotification(topic, title, body, data, options);
+    }
+    
+    // Fallback to old implementation
     try {
       const notification = await this.messaging.createPush(
         options.messageId || 'unique()',

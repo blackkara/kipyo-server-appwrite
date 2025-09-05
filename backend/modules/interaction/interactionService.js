@@ -1,5 +1,4 @@
 import AppwriteService from '../../services/appwrite/AppwriteService.js';
-import pushNotificationService from '../../pushNotificationsService.js';
 import { generatePhotoUrls } from '../../utils/photoUtils.js';
 import crypto from 'crypto';
 import { generateDocumentId } from '#id-generator';
@@ -831,10 +830,19 @@ class InteractionService {
           try {
             // Get liker's profile info for notification
             log(`[${requestId}] Sending like notification to user: ${receiverId}`);
-            await pushNotificationService.sendLikeNotification(
+            const appwriteInstance = AppwriteService.getInstance();
+            // Get sender's name for the notification
+            const senderProfile = await appwriteInstance.getDocument(
+              jwtToken,
+              process.env.DB_COLLECTION_USERS_ID,
+              senderId
+            );
+            const senderName = senderProfile?.firstName || 'Someone';
+            
+            await appwriteInstance.sendLikeNotification(
               senderId,
               receiverId,
-              'someone liked you'
+              senderName
             );
             log(`[${requestId}] Like notification sent successfully`);
           } catch (notificationError) {
@@ -1221,31 +1229,76 @@ class InteractionService {
 
   async sendLikeNotificationAsync(senderId, receiverId, requestId, log) {
     // Fire and forget pattern
-    pushNotificationService.sendLikeNotification(
-      senderId,
-      receiverId,
-      { message: 'Someone liked you!' }
-    ).catch(error => {
-      log(`[${requestId}] Failed to send like notification: ${error.message}`);
-    });
+    (async () => {
+      try {
+        const appwriteService = AppwriteService.getInstance();
+        // Try to get sender's name, but don't fail if we can't
+        let senderName = 'Someone';
+        try {
+          const senderProfile = await appwriteService.getDocument(
+            process.env.APPWRITE_DEV_KEY, // Use admin key for async operations
+            process.env.DB_COLLECTION_USERS_ID,
+            senderId
+          );
+          senderName = senderProfile?.firstName || 'Someone';
+        } catch (e) {
+          // Continue with default name
+        }
+        
+        await appwriteService.sendLikeNotification(
+          senderId,
+          receiverId,
+          senderName
+        );
+      } catch (error) {
+        log(`[${requestId}] Failed to send like notification: ${error.message}`);
+      }
+    })();
   }
 
   async sendMatchNotificationAsync(senderId, receiverId, matchId, requestId, log) {
     // Fire and forget pattern
-    Promise.all([
-      pushNotificationService.sendMatchNotification(
-        senderId,
-        receiverId,
-        { matchId, message: "It's a match!" }
-      ),
-      pushNotificationService.sendMatchNotification(
-        receiverId,
-        senderId,
-        { matchId, message: "It's a match!" }
-      )
-    ]).catch(error => {
-      log(`[${requestId}] Failed to send match notification: ${error.message}`);
-    });
+    (async () => {
+      try {
+        const appwriteService = AppwriteService.getInstance();
+        
+        // Try to get both users' names
+        let user1Name = 'Someone';
+        let user2Name = 'Someone';
+        
+        try {
+          const [user1Profile, user2Profile] = await Promise.all([
+            appwriteService.getDocument(
+              process.env.APPWRITE_DEV_KEY,
+              process.env.DB_COLLECTION_USERS_ID,
+              senderId
+            ),
+            appwriteService.getDocument(
+              process.env.APPWRITE_DEV_KEY,
+              process.env.DB_COLLECTION_USERS_ID,
+              receiverId
+            )
+          ]);
+          
+          user1Name = user1Profile?.firstName || 'Someone';
+          user2Name = user2Profile?.firstName || 'Someone';
+        } catch (e) {
+          // Continue with default names
+        }
+        
+        await appwriteService.sendMatchNotification(
+          senderId,
+          receiverId,
+          {
+            matchId,
+            user1Name,
+            user2Name
+          }
+        );
+      } catch (error) {
+        log(`[${requestId}] Failed to send match notification: ${error.message}`);
+      }
+    })();
   }
 
 }

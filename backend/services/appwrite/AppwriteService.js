@@ -162,6 +162,8 @@ class AppwriteService {
     });
 
     this.notificationTemplates = new NotificationTemplates(this.notificationService);
+    // Set AppwriteService reference for user language preferences
+    this.notificationTemplates.setAppwriteService(this);
 
     // Quota management module
     this.quotaManager = new QuotaManager({
@@ -291,6 +293,10 @@ class AppwriteService {
 
   getAdminDatabases() {
     return this.clientManager.getAdminDatabases();
+  }
+
+  getAdminUsers() {
+    return this.clientManager.getAdminUsers();
   }
 
   isJWTToken(auth) {
@@ -600,6 +606,114 @@ class AppwriteService {
 
   clearImageAnalysisCache() {
     return this.imageAnalysisService.clearCache();
+  }
+
+  // ======================
+  // User Operations (Preferences & Profile)
+  // ======================
+
+  /**
+   * Get user by ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} - User object
+   */
+  async getUser(userId) {
+    try {
+      const users = this.clientManager.getAdminUsers();
+      const user = await users.get(userId);
+      return {
+        success: true,
+        data: user
+      };
+    } catch (error) {
+      this.log(`Error getting user ${userId}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get user preferences
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} - User preferences object
+   */
+  async getUserPreferences(userId) {
+    try {
+      const users = this.clientManager.getAdminUsers();
+      const prefs = await users.getPrefs(userId);
+      return {
+        success: true,
+        data: prefs
+      };
+    } catch (error) {
+      this.log(`Error getting user preferences for ${userId}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Update user preferences
+   * @param {string} userId - User ID
+   * @param {Object} preferences - Preferences object to update
+   * @returns {Promise<Object>} - Updated preferences
+   */
+  async updateUserPreferences(userId, preferences) {
+    try {
+      const users = this.clientManager.getAdminUsers();
+      const updatedPrefs = await users.updatePrefs(userId, preferences);
+      return {
+        success: true,
+        data: updatedPrefs
+      };
+    } catch (error) {
+      this.log(`Error updating user preferences for ${userId}:`, error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get user's language preference
+   * @param {string} userId - User ID
+   * @returns {Promise<string>} - Language code (e.g., 'en', 'tr', 'de')
+   */
+  async getUserLanguage(userId) {
+    try {
+      const prefsResult = await this.getUserPreferences(userId);
+      if (prefsResult.success && prefsResult.data) {
+        // Check for app_language or language preference
+        return prefsResult.data.appLanguage || 'en';
+      }
+      return 'en'; // Default to English
+    } catch (error) {
+      this.log(`Error getting user language for ${userId}:`, error);
+      return 'en'; // Default to English on error
+    }
+  }
+
+  /**
+   * Get multiple users' language preferences in batch
+   * @param {string[]} userIds - Array of user IDs
+   * @returns {Promise<Object>} - Map of userId to language code
+   */
+  async getUserLanguages(userIds) {
+    const languageMap = {};
+    
+    // Process in parallel for better performance
+    const promises = userIds.map(async (userId) => {
+      const language = await this.getUserLanguage(userId);
+      languageMap[userId] = language;
+    });
+    
+    await Promise.all(promises);
+    return languageMap;
   }
 
   // ======================
