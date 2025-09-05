@@ -21,41 +21,7 @@
         "<node_internals>/**"
       ],
       "program": "${workspaceFolder}/backend/server.js",
-      "env": {
-        "NODE_ENV": "development",
-        "DB_COLLECTION_BLOCKS_ID": "6844239b0034fb5730c3",
-        "DB_COLLECTION_DIALOGS_ID": "686471e80005ec74da30",
-        "DB_COLLECTION_MESSAGES_ID": "6844c0bd0009e97e04f5",
-        "DB_COLLECTION_MATCHES_ID": "687665e10012180b14b8",
-        "DB_COLLECTION_LIKES_ID": "68437e97001fe14d03da",
-        "DB_COLLECTION_DISLIKES_ID": "687650a1000fcfa29f49",
-        "DB_COLLECTION_PROFILES_ID": "683e4215002f4fb69d06",
-        "DB_COLLECTION_PROFILE_MEDIA_ID": "67f8e5a1b2c3d4e5f6789012",
-        "DB_COLLECTION_PROFILE_MODERATION_ID": "67f8e5d1e2f3456789012c4d",
-        "DB_COLLECTION_PROFILE_PREFERENCES_ID": "67f8e5b1c2d3e4f5678901a2",
-        "DB_COLLECTION_PROFILE_QUOTAS_ID": "67f8e5c1d2e3f456789012b3",
-        "DB_COLLECTION_PROFILE_TIMEZONE_TRACKING_ID": "67f8e5e1f2345678901d2e3f",
-        "APPWRITE_END_POINT": "https://mobile-api.kipyo.com/v1",
-        "APPWRITE_PROJECT_ID": "6867d552001fa11c2dc3",
-        "APPWRITE_DB_ID": "657e07e99ad1b086d9a9",
-        "APPWRITE_DEV_KEY": "standard_e0f5448b02f14664c1a4de120df4cd9924da9cfd0ac8e47f0b93c80f50c844948d9c105bc4388528b7d7f21b4dcddeeed65b58efebd79a5b211a62e0ed1a869d064d0bfb538aedf17bb166d4f261a9897b7a98409ec646e834428ef8fcf6d2e4009e5425155dee89c1c975f8e37091b626875ffbcc1525c9202ada69c075cea0",
-        "SPACES_SECRET_ACCESS_KEY": "LDlnZSS28xV02xxUCYbwwVc2ASCXJ7/N15COCmYC9Fo",
-        "SPACES_ACCESS_KEY_ID": "DO00R9RUA88ZB7Y8JCKZ",
-        "SPACES_AWS_REGION": "us-east-1",
-        "SPACES_ENDPOINT": "https://fra1.digitaloceanspaces.com",
-        "SPACES_BUCKET": "kipyo",
-        "GOOGLE_CREDENTIALS": "",
-        "POSTHOG_API_KEY": "phc_ljNJimUeCYZy1IqQeoquGLq20QV59l2EvMo8KGZZoFp",
-        "GOOGLE_CLOUD_PROJECT_ID": "kipyo-prod",
-        "GOOGLE_TRANSLATE_API_KEY": "",
-        "GOOGLE_CLOUD_KEY_FILE": "./backend/google-translate-keyfile.json",
-        "SMTP_USER": "info@kipyo.com",
-        "SMTP_PASS": "vobszatkafgauxkd",
-        "SMTP_HOST": "smtp.yandex.com.tr",
-        "SMTP_PORT": "465",
-        "SMTP_SECURE": "true",
-        "EMAIL_FROM": "info@kipyo.com"
-      }
+      "envFile": "${workspaceFolder}/backend/.env"
     }
   ]
 }

@@ -34,7 +34,7 @@ initializeApp({
 });
 
 // Load environment variables
-dotenv.config({ path: '.env.local', override: true });
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
