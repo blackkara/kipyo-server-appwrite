@@ -44,26 +44,35 @@ export class TranslateService {
       const keyfilePath = this.config?.get('google.keyFilename') || process.env.GOOGLE_CLOUD_KEY_FILE;
 
       if (keyfilePath) {
-        // Use service account keyfile
-        const absolutePath = path.isAbsolute(keyfilePath)
-          ? keyfilePath
-          : path.join(process.cwd(), keyfilePath);
+        // Clean up the keyfile path - remove any leading "./" 
+        const cleanPath = keyfilePath.replace(/^\.\//, '');
+        
+        // Try multiple possible locations
+        const possiblePaths = [
+          path.join(process.cwd(), cleanPath),
+          path.join(process.cwd(), 'backend', cleanPath),
+          path.join('/app', cleanPath),
+          keyfilePath
+        ];
 
-        if (fs.existsSync(absolutePath)) {
-          // Read and parse keyfile
-          const keyfileContent = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
+        for (const testPath of possiblePaths) {
+          if (fs.existsSync(testPath)) {
+            // Read and parse keyfile
+            const keyfileContent = JSON.parse(fs.readFileSync(testPath, 'utf8'));
 
-          // v2 API için doğru constructor
-          this.translator = new Translate.Translate({
-            projectId: keyfileContent.project_id,
-            keyFilename: absolutePath
-          });
+            // v2 API için doğru constructor
+            this.translator = new Translate.Translate({
+              projectId: keyfileContent.project_id,
+              keyFilename: testPath
+            });
 
-          this.log('Google Translate initialized with service account keyfile');
-          return;
-        } else {
-          this.log(`Keyfile not found at ${absolutePath}, falling back to API key`);
+            this.log(`Google Translate initialized with service account keyfile from: ${testPath}`);
+            return;
+          }
         }
+        
+        this.log(`Keyfile not found in any of the checked paths, falling back to API key`);
+        this.log(`Checked paths: ${possiblePaths.join(', ')}`);
       }
 
       // Fallback to API key method
@@ -71,7 +80,10 @@ export class TranslateService {
       const apiKey = this.config?.get('google.apiKey') || process.env.GOOGLE_TRANSLATE_API_KEY;
 
       if (!apiKey) {
-        throw new Error('Google Translate API key or keyfile not configured');
+        this.log('Warning: Google Translate not configured. Translation features will be disabled.');
+        // Don't throw error, just disable translation
+        this.translator = null;
+        return;
       }
 
       // v2 API için doğru constructor
@@ -82,9 +94,9 @@ export class TranslateService {
 
       this.log('Google Translate initialized with API key');
     } catch (error) {
-      this.log('Failed to initialize Google Translate:', error.message);
-      console.error('Full error:', error);
-      throw error;
+      this.log('Warning: Failed to initialize Google Translate:', error.message);
+      // Don't throw error, just disable translation
+      this.translator = null;
     }
   }
 

@@ -1,0 +1,51 @@
+# Multi-stage build for production
+FROM node:20-alpine AS builder
+
+# Çalışma dizinini ayarla
+WORKDIR /app
+
+# Package dosyalarını kopyala
+COPY package*.json ./
+
+# Tüm bağımlılıkları yükle (dev dahil)
+RUN npm ci
+
+# Uygulama kodlarını kopyala
+COPY . .
+
+# Production image
+FROM node:20-alpine
+
+# Güvenlik güncellemeleri
+RUN apk update && apk upgrade && \
+    apk add --no-cache dumb-init
+
+# Çalışma dizinini ayarla
+WORKDIR /app
+
+# Non-root kullanıcı oluştur
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Builder'dan production dependencies'leri kopyala
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
+
+# Uygulama kodlarını kopyala
+COPY --chown=nodejs:nodejs . .
+
+# Dosya izinlerini ayarla
+RUN chmod 644 kipyo-prod-firebase-adminsdk.json 2>/dev/null || true && \
+    chmod 644 google-translate-keyfile.json 2>/dev/null || true
+
+# Uygulama portunu belirt
+EXPOSE 3000
+
+# Node.js kullanıcısına geç
+USER nodejs
+
+# Dumb-init ile process management
+ENTRYPOINT ["dumb-init", "--"]
+
+# Uygulamayı başlat
+CMD ["node", "server.js"]
