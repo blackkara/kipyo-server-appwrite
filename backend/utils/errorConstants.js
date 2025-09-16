@@ -20,6 +20,7 @@ export const ERROR_CODES = {
   PROFILE_UPDATE_FAILED: 'PROFILE_UPDATE_FAILED',
   PROFILE_ALREADY_EXISTS: 'PROFILE_ALREADY_EXISTS',
   PROFILE_CREATION_FAILED: 'PROFILE_CREATION_FAILED',
+  PROFILE_USERNAME_INVALID: 'PROFILE_USERNAME_INVALID',
 
   // Image Upload Errors (1300-1399)
   IMAGE_FORMAT_INVALID: 'IMAGE_FORMAT_INVALID',
@@ -52,6 +53,12 @@ export const ERROR_CODES = {
 };
 
 export const ERROR_MAPPINGS = {
+  [ERROR_CODES.PROFILE_USERNAME_INVALID]: {
+    statusCode: 401,
+    type: 'general_unauthorized'
+  },
+
+
   [ERROR_CODES.JWT_TOKEN_MISSING]: {
     statusCode: 401,
     type: 'general_unauthorized'

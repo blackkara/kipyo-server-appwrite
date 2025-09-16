@@ -4,6 +4,22 @@ import { ERROR_CODES, AppError, ErrorHandler } from '../../utils/errorConstants.
 
 class ProfileController {
 
+
+  calculateAge(birthDate) {
+    const today = new Date();
+    const birth = new Date(birthDate);
+
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+
+    return age;
+  }
+
+
   async createProfile(req, res) {
     const { startTime, requestId, jwtToken, requestedUser } = req;
     const log = (message) => console.log(message);
@@ -43,10 +59,10 @@ class ProfileController {
         throw new AppError(ERROR_CODES.INVALID_PARAMETER_VALUE, 'Invalid email format');
       }
 
-      // Username validation (3-30 characters, alphanumeric and underscore only)
-      const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+      const usernameRegex = /^[\p{L}0-9_]{3,20}$/u;
+
       if (!usernameRegex.test(username)) {
-        throw new AppError(ERROR_CODES.INVALID_PARAMETER_VALUE, 'Username must be 3-30 characters and contain only letters, numbers, and underscores');
+        throw new AppError(ERROR_CODES.PROFILE_USERNAME_INVALID, 'Username must be 3-30 characters and contain only letters, numbers, and underscores');
       }
 
       // Gender validation
@@ -61,7 +77,7 @@ class ProfileController {
         throw new AppError(ERROR_CODES.INVALID_PARAMETER_VALUE, 'Invalid birthDate format');
       }
 
-      const age = Math.floor((Date.now() - birthDateObj.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+      const age = calculateAge(birthDate);
       if (age < 18) {
         throw new AppError(ERROR_CODES.INVALID_PARAMETER_VALUE, 'User must be at least 18 years old');
       }
