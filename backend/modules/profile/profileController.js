@@ -77,7 +77,7 @@ class ProfileController {
         throw new AppError(ERROR_CODES.INVALID_PARAMETER_VALUE, 'Invalid birthDate format');
       }
 
-      const age = calculateAge(birthDate);
+      const age = this.calculateAge(birthDate);
       if (age < 18) {
         throw new AppError(ERROR_CODES.INVALID_PARAMETER_VALUE, 'User must be at least 18 years old');
       }
