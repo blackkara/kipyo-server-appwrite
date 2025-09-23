@@ -1,22 +1,14 @@
-// src/services/appwrite/messaging/NotificationConstants.js
-
-/**
- * Notification Types
- */
 export const NOTIFICATION_TYPES = {
   MATCH: 'match',
   LIKE: 'like',
   MESSAGE: 'message',
-  DIRECT_MESSAGE: 'direct_message',  // Special message without match/like
+  DIRECT_MESSAGE: 'direct_message',
   SYSTEM: 'system',
   PROMOTION: 'promotion',
   REMINDER: 'reminder',
   ALERT: 'alert'
 };
 
-/**
- * Notification Events for Tracking
- */
 export const NOTIFICATION_EVENTS = {
   NOTIFICATION_SENT: 'notification_sent',
   NOTIFICATION_FAILED: 'notification_failed',
@@ -25,9 +17,6 @@ export const NOTIFICATION_EVENTS = {
   SCHEDULED: 'notification_scheduled'
 };
 
-/**
- * Notification Priorities
- */
 export const NOTIFICATION_PRIORITIES = {
   LOW: 'low',
   NORMAL: 'normal',
@@ -35,9 +24,6 @@ export const NOTIFICATION_PRIORITIES = {
   CRITICAL: 'critical'
 };
 
-/**
- * Default Notification Options
- */
 export const DEFAULT_OPTIONS = {
   sound: 'default',
   badge: 1,
@@ -47,9 +33,6 @@ export const DEFAULT_OPTIONS = {
   draft: false
 };
 
-/**
- * Notification Templates
- */
 export const NOTIFICATION_TEMPLATES = {
   MATCH: {
     title: "It's a Match! 🎉",
@@ -73,9 +56,6 @@ export const NOTIFICATION_TEMPLATES = {
   }
 };
 
-/**
- * Topic Names
- */
 export const TOPICS = {
   ALL_USERS: 'all_users',
   PREMIUM_USERS: 'premium_users',
