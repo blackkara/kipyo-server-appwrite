@@ -833,11 +833,37 @@ export class NotificationTemplates {
   }
 
   async sendDirectMessageNotification(senderId, receiverId, senderName, messagePreview, directMessageData = {}) {
+    // Get user's language preference first
+    let userLanguage = 'en';
+    if (this.appwriteService) {
+      userLanguage = await this.appwriteService.getUserLanguage(receiverId);
+    }
+
+    // Get localized message preview if we have attachment/content info
+    let localizedPreview = messagePreview;
+    if (directMessageData.hasAttachment && directMessageData.messageType) {
+      // Extract attachment info from directMessageData or reconstruct it
+      const attachment = {
+        type: directMessageData.messageType === 2 ? 'photo' : 
+              directMessageData.messageType === 3 ? 'video' : 
+              directMessageData.messageType === 4 ? 'audio' : null
+      };
+      
+      if (attachment.type) {
+        // Get the original message content (without icons/previews)
+        const originalContent = messagePreview.replace(/^[📷🎥🎵]\s*/, '').replace(/^Sent a[n]? (photo|video|audio)$/, '');
+        localizedPreview = this.getLocalizedMessagePreview(originalContent, attachment, userLanguage);
+      }
+    }
+
     // Get localized notification
     const localizedNotification = await this.getLocalizedNotification(
       receiverId,
       'DIRECT_MESSAGE',
-      { senderName }
+      { 
+        senderName,
+        messagePreview: localizedPreview // Add preview to direct message template if needed
+      }
     );
 
     // Direct message has special data to indicate it's a privileged message
@@ -871,10 +897,284 @@ export class NotificationTemplates {
     return result;
   }
 
+  getLocalizedMessagePreview(messageContent, attachment, language = 'en') {
+    // Define localized media type messages
+    const MEDIA_MESSAGES = {
+      en: {
+        photo_sent: 'sent a photo',
+        video_sent: 'sent a video', 
+        audio_sent: 'sent an audio',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      tr: {
+        photo_sent: 'fotoğraf gönderdi',
+        video_sent: 'video gönderdi',
+        audio_sent: 'ses kaydı gönderdi',
+        photo_icon: '📷',
+        video_icon: '🎥', 
+        audio_icon: '🎵'
+      },
+      de: {
+        photo_sent: 'hat ein Foto gesendet',
+        video_sent: 'hat ein Video gesendet',
+        audio_sent: 'hat eine Audiodatei gesendet',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      es: {
+        photo_sent: 'envió una foto',
+        video_sent: 'envió un video',
+        audio_sent: 'envió un audio',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      fr: {
+        photo_sent: 'a envoyé une photo',
+        video_sent: 'a envoyé une vidéo',
+        audio_sent: 'a envoyé un audio',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      ar: {
+        photo_sent: 'أرسل صورة',
+        video_sent: 'أرسل فيديو',
+        audio_sent: 'أرسل تسجيل صوتي',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      bn: {
+        photo_sent: 'একটি ছবি পাঠিয়েছে',
+        video_sent: 'একটি ভিডিও পাঠিয়েছে',
+        audio_sent: 'একটি অডিও পাঠিয়েছে',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      zh: {
+        photo_sent: '发送了一张照片',
+        video_sent: '发送了一个视频',
+        audio_sent: '发送了一个音频',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      he: {
+        photo_sent: 'שלח תמונה',
+        video_sent: 'שלח וידאו',
+        audio_sent: 'שלח הקלטה',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      hi: {
+        photo_sent: 'एक फोटो भेजी',
+        video_sent: 'एक वीडियो भेजा',
+        audio_sent: 'एक ऑडियो भेजा',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      id: {
+        photo_sent: 'mengirim foto',
+        video_sent: 'mengirim video',
+        audio_sent: 'mengirim audio',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      it: {
+        photo_sent: 'ha inviato una foto',
+        video_sent: 'ha inviato un video',
+        audio_sent: 'ha inviato un audio',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      ja: {
+        photo_sent: '写真を送信しました',
+        video_sent: '動画を送信しました',
+        audio_sent: '音声を送信しました',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      ko: {
+        photo_sent: '사진을 보냈습니다',
+        video_sent: '동영상을 보냈습니다',
+        audio_sent: '음성을 보냈습니다',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      fa: {
+        photo_sent: 'عکسی فرستاد',
+        video_sent: 'ویدیویی فرستاد',
+        audio_sent: 'صدایی فرستاد',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      pl: {
+        photo_sent: 'wysłał zdjęcie',
+        video_sent: 'wysłał wideo',
+        audio_sent: 'wysłał dźwięk',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      pt: {
+        photo_sent: 'enviou uma foto',
+        video_sent: 'enviou um vídeo',
+        audio_sent: 'enviou um áudio',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      ru: {
+        photo_sent: 'отправил фото',
+        video_sent: 'отправил видео',
+        audio_sent: 'отправил аудио',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      th: {
+        photo_sent: 'ส่งรูปภาพ',
+        video_sent: 'ส่งวิดีโอ',
+        audio_sent: 'ส่งเสียง',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      uk: {
+        photo_sent: 'надіслав фото',
+        video_sent: 'надіслав відео',
+        audio_sent: 'надіслав аудіо',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      ur: {
+        photo_sent: 'تصویر بھیجی',
+        video_sent: 'ویڈیو بھیجا',
+        audio_sent: 'آڈیو بھیجا',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      vi: {
+        photo_sent: 'đã gửi ảnh',
+        video_sent: 'đã gửi video',
+        audio_sent: 'đã gửi âm thanh',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      ms: {
+        photo_sent: 'menghantar gambar',
+        video_sent: 'menghantar video',
+        audio_sent: 'menghantar audio',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      sw: {
+        photo_sent: 'alituma picha',
+        video_sent: 'alituma video',
+        audio_sent: 'alituma sauti',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      nl: {
+        photo_sent: 'heeft een foto gestuurd',
+        video_sent: 'heeft een video gestuurd',
+        audio_sent: 'heeft een audio gestuurd',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      sv: {
+        photo_sent: 'skickade en bild',
+        video_sent: 'skickade en video',
+        audio_sent: 'skickade ett ljud',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      no: {
+        photo_sent: 'sendte et bilde',
+        video_sent: 'sendte en video',
+        audio_sent: 'sendte en lyd',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      },
+      da: {
+        photo_sent: 'sendte et billede',
+        video_sent: 'sendte en video',
+        audio_sent: 'sendte en lyd',
+        photo_icon: '📷',
+        video_icon: '🎥',
+        audio_icon: '🎵'
+      }
+    };
+
+    const messages = MEDIA_MESSAGES[language] || MEDIA_MESSAGES.en;
+
+    if (attachment) {
+      const { type } = attachment;
+      const icon = messages[`${type}_icon`] || '';
+      
+      if (messageContent && messageContent.trim()) {
+        // If there's a caption, show icon + caption
+        return `${icon} ${messageContent}`;
+      } else {
+        // If no caption, show localized "sent a photo/video/audio" message
+        const mediaMessage = messages[`${type}_sent`] || `sent a ${type}`;
+        return `${icon} ${mediaMessage}`;
+      }
+    } else if (messageContent && messageContent.length > 100) {
+      // For long text messages, truncate
+      return messageContent.substring(0, 97) + '...';
+    }
+
+    return messageContent || '';
+  }
+
   async sendMessageNotification(senderId, receiverId, senderName, messagePreview, conversationData = {}) {
-    const truncatedPreview = messagePreview.length > 100 ?
-      messagePreview.substring(0, 97) + '...' :
-      messagePreview;
+    // Get user's language preference first
+    let userLanguage = 'en';
+    if (this.appwriteService) {
+      userLanguage = await this.appwriteService.getUserLanguage(receiverId);
+    }
+
+    // Get localized message preview if we have attachment/content info
+    let localizedPreview = messagePreview;
+    if (conversationData.hasAttachment && conversationData.messageType) {
+      // Extract attachment info from conversationData or reconstruct it
+      const attachment = {
+        type: conversationData.messageType === 2 ? 'photo' : 
+              conversationData.messageType === 3 ? 'video' : 
+              conversationData.messageType === 4 ? 'audio' : null
+      };
+      
+      if (attachment.type) {
+        // Get the original message content (without icons/previews)
+        const originalContent = messagePreview.replace(/^[📷🎥🎵]\s*/, '').replace(/^Sent a[n]? (photo|video|audio)$/, '');
+        localizedPreview = this.getLocalizedMessagePreview(originalContent, attachment, userLanguage);
+      }
+    }
+
+    const truncatedPreview = localizedPreview.length > 100 ?
+      localizedPreview.substring(0, 97) + '...' :
+      localizedPreview;
 
     // Get localized notification
     const localizedNotification = await this.getLocalizedNotification(

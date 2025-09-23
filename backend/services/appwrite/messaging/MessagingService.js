@@ -279,20 +279,8 @@ export class MessagingService {
       // Send push notification to receiver
       let notificationResult = { success: false };
       try {
-        // Customize preview for media messages
-        let messagePreview = messageContent;
-        if (attachment) {
-          const icons = { photo: '📷', video: '🎥', audio: '🎵' };
-          if (messageContent) {
-            // If there's a caption, show icon + caption
-            messagePreview = `${icons[attachment.type] || ''} ${messageContent}`;
-          } else {
-            // If no caption, show icon + type
-            messagePreview = `${icons[attachment.type] || ''} Sent a${attachment.type === 'audio' ? 'n' : ''} ${attachment.type}`;
-          }
-        } else if (messageContent && messageContent.length > 100) {
-          messagePreview = messageContent.substring(0, 97) + '...';
-        }
+        // Use messageContent as base preview - localization will be handled in NotificationTemplates
+        let messagePreview = messageContent || '';
 
         notificationResult = await this.notificationTemplates.sendMessageNotification(
           senderId,
@@ -469,20 +457,8 @@ export class MessagingService {
       // Send special direct message push notification
       let notificationResult = { success: false };
       try {
-        // Customize preview for media messages
-        let messagePreview = messageContent;
-        if (attachment) {
-          const icons = { photo: '📷', video: '🎥', audio: '🎵' };
-          if (messageContent) {
-            // If there's a caption, show icon + caption
-            messagePreview = `${icons[attachment.type] || ''} ${messageContent}`;
-          } else {
-            // If no caption, show icon + type
-            messagePreview = `${icons[attachment.type] || ''} Sent a${attachment.type === 'audio' ? 'n' : ''} ${attachment.type}`;
-          }
-        } else if (messageContent && messageContent.length > 100) {
-          messagePreview = messageContent.substring(0, 97) + '...';
-        }
+        // Use messageContent as base preview - localization will be handled in NotificationTemplates
+        let messagePreview = messageContent || '';
 
         notificationResult = await this.notificationTemplates.sendDirectMessageNotification(
           senderId,
