@@ -93,7 +93,7 @@ class ProfileService {
       // ===========================================
       // TIMEZONE VE RESET KONTROLÜ (YENİ)
       // ===========================================
-      const timeZoneUpdateResult = await appwriteService.quotaManager.updateUserTimezone(jwtToken, profile, 180);
+      const timeZoneUpdateResult = await appwriteService.quotaManager.updateUserTimezone(jwtToken, profile, requestedTimezone);
       log(`[${requestId}] GetProfile pre validation - Remaining direct messages: ${profile.dailyDirectMessageRemaining}`);
 
       const profileCompletionStats = ProfileUtils.getProfileCompletionDetails(profile);
