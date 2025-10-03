@@ -1,0 +1,4 @@
+docker stop appwrite-traefik
+certbot renew
+docker run --rm -v appwrite_appwrite-certificates:/certs -v /etc/letsencrypt:/letsencrypt alpine sh -c "cp /letsencrypt/live/mobile-api.kipyo.com/fullchain.pem /certs/cert.pem && cp /letsencrypt/live/mobile-api.kipyo.com/privkey.pem /certs/key.pem"
+docker start appwrite-traefik
