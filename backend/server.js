@@ -123,17 +123,7 @@ app.get('/', (req, res) => {
     message: 'Dialog Service API',
     version: '1.0.0',
     status: 'healthy',
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      'POST /api/dialogs': 'Create or get dialog',
-      'GET /api/dialogs/health': 'Health check',
-      'POST /api/profile/update': 'Update profile',
-      'POST /api/profile/uploadPhoto': 'Upload photo',
-      'GET /api/explore': 'Explore profiles',
-      'POST /api/interactions': 'Create interaction',
-      'GET /api/matches': 'Get matches',
-      'POST /api/messages': 'Send message'
-    }
+    timestamp: new Date().toISOString()
   });
 });
 
