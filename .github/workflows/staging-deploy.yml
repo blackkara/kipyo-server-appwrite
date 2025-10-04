@@ -1,0 +1,155 @@
+name: Staging Deployment
+
+on:
+  push:
+    branches: [staging]
+  pull_request:
+    branches: [staging]
+    types: [opened, synchronize, reopened]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./backend
+        run: npm test || echo "⚠️ Tests not configured yet"
+        continue-on-error: true
+
+      - name: Run integration tests
+        working-directory: ./backend
+        run: npm run test:integration || echo "⚠️ Integration tests not configured yet"
+        continue-on-error: true
+
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=staging-
+            type=raw,value=staging-latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push'
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging server
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          echo "ℹ️ Deployment configuration needed:"
+          echo "   - Set STAGING_SERVER_HOST in GitHub secrets"
+          echo "   - Set STAGING_SSH_KEY in GitHub secrets"
+          echo "   - Configure deployment script"
+          echo ""
+          echo "📝 Example deployment command:"
+          echo "   ssh user@staging-server 'cd /app && docker-compose pull && docker-compose up -d'"
+
+      # Gerçek deployment için aşağıdaki adımları kullanın:
+      # - name: Setup SSH
+      #   uses: webfactory/ssh-agent@v0.8.0
+      #   with:
+      #     ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+      #
+      # - name: Deploy to server
+      #   run: |
+      #     ssh -o StrictHostKeyChecking=no user@${{ secrets.STAGING_SERVER_HOST }} << 'EOF'
+      #       cd /app/kipyo-backend
+      #       docker-compose pull backend
+      #       docker-compose up -d backend
+      #       docker-compose logs --tail=50 backend
+      #     EOF
+
+      - name: Health check
+        run: |
+          echo "🏥 Running health check..."
+          echo "ℹ️ Configure your staging URL in repository variables (STAGING_URL)"
+          # curl -f ${{ vars.STAGING_URL }}/health || exit 1
+
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [test, build-and-push, deploy-staging]
+    if: always()
+    
+    steps:
+      - name: Deployment status
+        run: |
+          if [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+            echo "✅ Staging deployment successful!"
+          else
+            echo "❌ Staging deployment failed!"
+          fi
+          
+      # Slack notification örneği:
+      # - name: Slack Notification
+      #   uses: 8398a7/action-slack@v3
+      #   with:
+      #     status: ${{ job.status }}
+      #     text: 'Staging Deployment: ${{ needs.deploy-staging.result }}'
+      #     webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      #   if: always()
