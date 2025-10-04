@@ -1,0 +1,23 @@
+# 1. Yeni script'i oluştur
+nano /root/backup_to_gdrive.sh
+# (Yukarıdaki güncel script'i yapıştır)
+
+# 2. İzin ver
+chmod +x /root/backup_to_gdrive.sh
+
+# 3. Google Drive klasörlerini oluştur
+rclone mkdir gdrive:AppwriteBackups
+rclone mkdir gdrive:AppwriteBackups/Database
+rclone mkdir gdrive:AppwriteBackups/Config
+
+# 4. Test et
+/root/backup_to_gdrive.sh
+
+# 5. Kontrol et
+rclone ls gdrive:AppwriteBackups/Database/
+rclone ls gdrive:AppwriteBackups/Config/
+
+# 6. Cron ekle
+crontab -e
+# Ekle:
+0 3 * * * /root/backup_to_gdrive.sh >> /var/log/appwrite_backup.log 2>&1
