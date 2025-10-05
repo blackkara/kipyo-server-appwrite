@@ -34,7 +34,7 @@ export class QuotaManager {
 
     // Format log output
     const formattedLog = `${this.LOG_PREFIX} [${level}] [${timestamp}] ${message}`;
-    
+
     if (data) {
       this.log(formattedLog, data);
     } else {
@@ -71,15 +71,15 @@ export class QuotaManager {
   }
 
   /**
- * Get quota status for all or specific quota types without consuming
- * @param {string} jwtToken - User JWT token
- * @param {string} userId - User ID
- * @param {Array<string>} quotaTypes - Optional array of specific quota types to check. If not provided, returns all.
- * @returns {Promise<Object>} - Object containing status for each requested quota type
- */
+   * Get quota status for all or specific quota types without consuming
+   * @param {string} jwtToken - User JWT token
+   * @param {string} userId - User ID
+   * @param {Array<string>} quotaTypes - Optional array of specific quota types to check. If not provided, returns all.
+   * @returns {Promise<Object>} - Object containing status for each requested quota type
+   */
   async getAllQuotaStatuses(jwtToken, userId, quotaTypes = null) {
     this._logDebug('Getting all quota statuses', { userId, quotaTypes });
-    
+
     try {
       // Get user profile once
       const profile = await this.getFullProfile(jwtToken, userId);
@@ -96,18 +96,36 @@ export class QuotaManager {
         allQuotas.filter(q => quotaTypes.includes(q.quotaType)) :
         allQuotas;
 
-      this._logDebug('Processing quotas', { 
-        userId, 
+      this._logDebug('Processing quotas', {
+        userId,
         totalQuotas: allQuotas.length,
-        quotasToProcess: quotasToProcess.length 
+        quotasToProcess: quotasToProcess.length
       });
+
+      // Check for suspicious timezone activity
+      const fraudCheck = await this.detectTimezoneManipulation(jwtToken, userId, profile);
+
+      let safeTimezoneOffset = timezoneTracking.timezoneOffset || 0;
+
+      if (fraudCheck.isSuspicious) {
+        // Use safe timezone (previous trusted timezone)
+        safeTimezoneOffset = timezoneTracking.previousOffset || 0;
+
+        this._logWarning('Using safe timezone for quota status', {
+          userId,
+          suspiciousTimezone: timezoneTracking.timezoneOffset,
+          safeTimezone: safeTimezoneOffset,
+          fraudScore: fraudCheck.score,
+          reasons: fraudCheck.reasons
+        });
+      }
 
       const results = {};
       const summary = {
         totalQuotas: 0,
         totalRemaining: 0,
         totalUsed: 0,
-        timezoneOffset: timezoneTracking.timezoneOffset !== null && timezoneTracking.timezoneOffset !== undefined ? timezoneTracking.timezoneOffset : 0,
+        timezoneOffset: safeTimezoneOffset,
         isSuspended: profile.quotaSuspended || false,
         suspensionReason: profile.quotaSuspensionReason,
         suspensionDate: profile.quotaSuspensionDate
@@ -115,12 +133,12 @@ export class QuotaManager {
 
       //Check if user is suspended
       if (summary.isSuspended) {
-        this._logWarning('User is suspended', { 
-          userId, 
+        this._logWarning('User is suspended', {
+          userId,
           reason: profile.quotaSuspensionReason,
-          date: profile.quotaSuspensionDate 
+          date: profile.quotaSuspensionDate
         });
-        
+
         return {
           success: false,
           suspended: true,
@@ -135,21 +153,42 @@ export class QuotaManager {
         const quotaType = quotaDoc.quotaType;
         const quotaName = quotaType.toLowerCase().replace(/_/g, '');
 
-        // Check if quota needs reset based on resetDate in document
-        const resetCheck = this.shouldResetQuota(timezoneTracking.timezoneOffset, quotaDoc.resetDate);
+        // Check if quota needs reset based on resetDate in document - using SAFE timezone
+        const resetCheck = this.shouldResetQuota(safeTimezoneOffset, quotaDoc.resetDate);
         let currentRemaining = quotaDoc.remainingCount;
 
         if (resetCheck.shouldReset || currentRemaining === undefined || currentRemaining === null) {
           currentRemaining = quotaDoc.dailyLimit;
-          this._logDebug('Quota needs reset', { 
-            userId, 
-            quotaType, 
-            shouldReset: resetCheck.shouldReset,
-            newRemaining: currentRemaining 
+
+          // Reset date'i kontrol et
+          const newResetDate = resetCheck.resetDate || this.getNextResetTime(safeTimezoneOffset).toISOString();
+
+          this._logDebug('Resetting quota in database', {
+            userId,
+            quotaType,
+            quotaId: quotaDoc.$id,
+            newRemaining: currentRemaining,
+            newResetDate,
+            usedTimezone: safeTimezoneOffset
           });
+
+          // Database'i güncelle
+          await this.adminOps.updateDocument(
+            jwtToken,
+            process.env.DB_COLLECTION_PROFILE_QUOTAS_ID,
+            quotaDoc.$id,
+            {
+              remainingCount: currentRemaining,
+              resetDate: newResetDate,
+              lastUsed: null
+            }
+          );
+
+          // Güncellenen değeri kullan
+          quotaDoc.resetDate = newResetDate;
         }
 
-        const nextReset = this.getNextResetTime(timezoneTracking.timezoneOffset || 0);
+        const nextReset = this.getNextResetTime(safeTimezoneOffset);
         const used = quotaDoc.dailyLimit - currentRemaining;
 
         results[quotaName] = {
@@ -178,10 +217,11 @@ export class QuotaManager {
         summary.overallPercentageRemaining = Math.round((summary.totalRemaining / summary.totalQuotas) * 100);
       }
 
-      this._log('Successfully retrieved all quota statuses', { 
-        userId, 
+      this._log('Successfully retrieved all quota statuses', {
+        userId,
         quotaCount: Object.keys(results).length,
-        totalRemaining: summary.totalRemaining 
+        totalRemaining: summary.totalRemaining,
+        usedSafeTimezone: fraudCheck.isSuspicious
       });
 
       return {
@@ -196,7 +236,6 @@ export class QuotaManager {
       throw error;
     }
   }
-
   /**
    * Get a quick summary of quota usage across all types
    * @param {string} jwtToken - User JWT token
@@ -205,7 +244,7 @@ export class QuotaManager {
    */
   async getQuotaSummary(jwtToken, userId) {
     this._logDebug('Getting quota summary', { userId });
-    
+
     try {
       const profile = await this.getFullProfile(jwtToken, userId);
       const quotas = profile.quotas || [];
@@ -267,7 +306,7 @@ export class QuotaManager {
    */
   async getQuotaDashboard(jwtToken, userId) {
     this._logDebug('Getting quota dashboard', { userId });
-    
+
     try {
       const allStatuses = await this.getAllQuotaStatuses(jwtToken, userId);
 
@@ -353,10 +392,10 @@ export class QuotaManager {
         timezoneOffset: allStatuses.summary.timezoneOffset
       };
 
-      this._log('Successfully retrieved quota dashboard', { 
-        userId, 
+      this._log('Successfully retrieved quota dashboard', {
+        userId,
         cardCount: dashboard.cards.length,
-        alertCount: dashboard.alerts.length 
+        alertCount: dashboard.alerts.length
       });
 
       return dashboard;
@@ -378,7 +417,7 @@ export class QuotaManager {
    */
   async checkAndConsumeQuota(jwtToken, userId, quotaType, amount = 1) {
     this._log('Checking and consuming quota', { userId, quotaType, amount });
-    
+
     try {
       // Get user profile with quotas
       const profile = await this.getFullProfile(jwtToken, userId);
@@ -399,14 +438,14 @@ export class QuotaManager {
 
       // Check for timezone manipulation
       const fraudCheck = await this.detectTimezoneManipulation(jwtToken, userId, profile);
-      
+
       const timezoneTracking = profile.timezoneTracking || {};
       let safeTimezoneOffset = timezoneTracking.timezoneOffset || 0;
-      
+
       if (fraudCheck.isSuspicious) {
         // Use safe timezone (previous trusted timezone)
         safeTimezoneOffset = timezoneTracking.previousOffset || 0;
-        
+
         this._logWarning('Using safe timezone for quota consumption', {
           userId,
           quotaType,
@@ -440,9 +479,9 @@ export class QuotaManager {
           }
         );
 
-        this._log('Reset quota', { 
-          userId, 
-          quotaType, 
+        this._log('Reset quota', {
+          userId,
+          quotaType,
           newRemaining: currentRemaining,
           resetDate,
           usedTimezone: safeTimezoneOffset
@@ -546,57 +585,80 @@ export class QuotaManager {
    */
   shouldResetQuota(timezoneOffset, lastResetDate) {
     this._logDebug('Checking if quota should reset', { timezoneOffset, lastResetDate });
-    
-    // timezoneOffset: dakika cinsinden offset değeri
-    // Örnek: UTC+3 için timezoneOffset = 180, UTC-5 için timezoneOffset = -300
+
     timezoneOffset = timezoneOffset !== null && timezoneOffset !== undefined ? timezoneOffset : 0;
 
-    // Şu anki UTC zamanı
-    const nowUTC = new Date();
-    const nowUTCTime = nowUTC.getTime();
+    const now = new Date();
 
-    // Kullanıcının yerel zamanında bugünün başlangıcını (gece yarısı) bul
-    // Önce UTC'de bugünün başlangıcını bul
-    const todayUTC = new Date(nowUTC);
-    todayUTC.setUTCHours(0, 0, 0, 0);
+    // Kullanıcının local zamanını hesapla
+    const userLocalTime = new Date(now.getTime() + (timezoneOffset * 60 * 1000));
 
-    // Sonra kullanıcının timezone'una göre ayarla
-    // Kullanıcının gece yarısı UTC'de ne zaman?
-    const userMidnightUTC = new Date(todayUTC.getTime() + (timezoneOffset * 60 * 1000));
+    // Kullanıcının local zamanında bugünün başlangıcını bul
+    const userMidnightLocal = new Date(userLocalTime);
+    userMidnightLocal.setUTCHours(0, 0, 0, 0);
 
-    // Eğer kullanıcının gece yarısı henüz gelmemişse, bir gün öncesini al
-    if (userMidnightUTC.getTime() > nowUTCTime) {
-      userMidnightUTC.setDate(userMidnightUTC.getDate() - 1);
-    }
+    // Bu local gece yarısını UTC'ye çevir
+    const userMidnightUTC = new Date(userMidnightLocal.getTime() - (timezoneOffset * 60 * 1000));
 
     if (!lastResetDate) {
-      // İlk reset
-      this._logDebug('First reset detected', { userMidnightUTC: userMidnightUTC.toISOString() });
+      this._logDebug('First reset detected', {
+        userMidnightUTC: userMidnightUTC.toISOString(),
+        userLocalTime: userLocalTime.toISOString()
+      });
       return {
         shouldReset: true,
         resetDate: userMidnightUTC.toISOString()
       };
     }
 
-    // Son reset zamanını kontrol et
     const lastResetTime = new Date(lastResetDate).getTime();
+    const userMidnightTime = userMidnightUTC.getTime();
 
-    // Eğer son reset bugünün gece yarısından önceyse, reset gerekli
-    if (lastResetTime < userMidnightUTC.getTime()) {
-      this._logDebug('Reset needed', { 
+    // Son reset bugünün gece yarısından ÖNCE mi?
+    // Ama aynı zamanda, eğer lastResetTime gelecekte ise (timezone manipülasyonundan dolayı)
+    // yine de reset yapma
+    const nowTime = now.getTime();
+
+    // Eğer lastResetTime gelecekteyse, bu timezone manipülasyonundan kaynaklanıyor
+    // Bu durumda userMidnightUTC'yi baz al
+    if (lastResetTime > nowTime) {
+      this._logDebug('Last reset is in future - timezone manipulation detected', {
         lastResetTime: new Date(lastResetTime).toISOString(),
+        nowTime: now.toISOString(),
         userMidnightUTC: userMidnightUTC.toISOString()
       });
-      
+
+      // Gece yarısı geçtiyse reset yap
+      if (nowTime >= userMidnightTime) {
+        return {
+          shouldReset: true,
+          resetDate: userMidnightUTC.toISOString()
+        };
+      }
+
+      return { shouldReset: false };
+    }
+
+    // Normal durum: son reset geçmişte
+    if (lastResetTime < userMidnightTime) {
+      this._logDebug('Reset needed', {
+        lastResetTime: new Date(lastResetTime).toISOString(),
+        userMidnightUTC: userMidnightUTC.toISOString(),
+        userLocalTime: userLocalTime.toISOString(),
+        hoursSinceReset: (nowTime - lastResetTime) / 3600000
+      });
+
       return {
         shouldReset: true,
         resetDate: userMidnightUTC.toISOString()
       };
     }
 
-    this._logDebug('No reset needed', { 
+    this._logDebug('No reset needed', {
       lastResetTime: new Date(lastResetTime).toISOString(),
-      userMidnightUTC: userMidnightUTC.toISOString()
+      userMidnightUTC: userMidnightUTC.toISOString(),
+      userLocalTime: userLocalTime.toISOString(),
+      hoursSinceReset: (nowTime - lastResetTime) / 3600000
     });
 
     return {
@@ -645,7 +707,7 @@ export class QuotaManager {
    */
   async detectTimezoneManipulation(_jwtToken, _userId, profile) {
     this._logDebug('Detecting timezone manipulation', { userId: _userId });
-    
+
     const result = {
       isSuspicious: false,
       reasons: [],
@@ -671,7 +733,7 @@ export class QuotaManager {
       result.isSuspicious = true;
       result.reasons.push('Too many timezone changes today');
       result.score += 50;
-      
+
       this._logWarning('Too many timezone changes detected', {
         userId: _userId,
         dailyChangeCount,
@@ -687,7 +749,7 @@ export class QuotaManager {
         result.isSuspicious = true;
         result.reasons.push(`Unrealistic timezone change: ${offsetChange} minutes`);
         result.score += 70;
-        
+
         this._logWarning('Unrealistic timezone jump detected', {
           userId: _userId,
           offsetChange,
@@ -706,7 +768,7 @@ export class QuotaManager {
         result.isSuspicious = true;
         result.reasons.push('Rapid timezone changes detected');
         result.score += 30;
-        
+
         this._logWarning('Rapid timezone change detected', {
           userId: _userId,
           timeSinceLastChange,
@@ -724,13 +786,13 @@ export class QuotaManager {
           result.isSuspicious = true;
           result.reasons.push('Timezone change shortly after quota exhaustion');
           result.score += 60;
-          
+
           this._logWarning('Timezone change after quota exhaustion', {
             userId: _userId,
             quotaType: quota.quotaType,
             timeSinceExhaustion
           });
-          
+
           break;
         }
       }
@@ -790,7 +852,7 @@ export class QuotaManager {
         profile.moderation.$id,
         moderationData
       );
-      
+
       this._log('Updated moderation record', { userId, moderationId: profile.moderation.$id });
     } else {
       // Create new moderation record
@@ -802,30 +864,30 @@ export class QuotaManager {
         ID.unique(),
         moderationData
       );
-      
+
       this._log('Created new moderation record', { userId });
     }
   }
 
   /**
-   * Update timezone for a user with fraud checks
-   * @param {string} jwtToken - User JWT token
-   * @param {Object} profile - User profile object with timezoneTracking
-   * @param {number} newOffset - New timezone offset in minutes
-   * @returns {Promise<Object>} - Update result
-   */
+  * Update timezone for a user with fraud checks
+  * @param {string} jwtToken - User JWT token
+  * @param {Object} profile - User profile object with timezoneTracking
+  * @param {number} newOffset - New timezone offset in minutes
+  * @returns {Promise<Object>} - Update result
+  */
   async updateUserTimezone(jwtToken, profile, newOffset) {
-    this._log('Updating user timezone', { 
-      userId: profile.userId, 
-      newOffset 
+    this._log('Updating user timezone', {
+      userId: profile.userId,
+      newOffset
     });
-    
+
     try {
       // Validate offset
       if (!this.isValidTimezoneOffset(newOffset)) {
-        this._logError('Invalid timezone offset', new Error('Invalid offset'), { 
-          userId: profile.userId, 
-          newOffset 
+        this._logError('Invalid timezone offset', new Error('Invalid offset'), {
+          userId: profile.userId,
+          newOffset
         });
         throw new Error('Invalid timezone offset');
       }
@@ -846,7 +908,7 @@ export class QuotaManager {
       // Check if timezone actually changed
       if (currentOffset === newOffset) {
         this._logDebug('No timezone change needed', { userId, currentOffset, newOffset });
-        
+
         return {
           success: true,
           newOffset,
@@ -903,8 +965,26 @@ export class QuotaManager {
           dailyChangeCount
         });
 
-        // DO NOT update database
-        // Return success to UI but keep old timezone
+        // Update metadata but NOT timezoneOffset
+        // This allows future fraud detection to work
+        const rejectionUpdateData = {
+          previousOffset: newOffset, // Store attempted offset
+          timezoneChangeDate: new Date().toISOString(),
+          dailyChangeCount: dailyChangeCount
+          // timezoneOffset stays at currentOffset (not updated)
+        };
+
+        // Update timezone tracking with rejection metadata
+        if (timezoneTracking.$id) {
+          await this.adminOps.updateDocument(
+            jwtToken,
+            process.env.DB_COLLECTION_PROFILE_TIMEZONE_TRACKING_ID,
+            timezoneTracking.$id,
+            rejectionUpdateData
+          );
+        }
+
+        // Return success to UI but with old timezone
         return {
           success: true,
           newOffset: currentOffset, // Return old offset, not new one
@@ -925,7 +1005,7 @@ export class QuotaManager {
           timezoneTracking.$id,
           updateData
         );
-        
+
         this._log('Updated timezone tracking', { userId, trackingId: timezoneTracking.$id });
       } else {
         // If no timezone tracking exists, create one
@@ -940,7 +1020,7 @@ export class QuotaManager {
             ...updateData
           }
         );
-        
+
         this._log('Created new timezone tracking', { userId });
       }
 
@@ -966,7 +1046,6 @@ export class QuotaManager {
       throw error;
     }
   }
-
   /**
    * Get quota status for a user without consuming
    * @param {string} jwtToken - User JWT token
@@ -976,7 +1055,7 @@ export class QuotaManager {
    */
   async getQuotaStatus(jwtToken, userId, quotaType) {
     this._logDebug('Getting quota status', { userId, quotaType });
-    
+
     try {
       // Get user profile with quotas
       const profile = await this.getFullProfile(jwtToken, userId);
@@ -1009,11 +1088,11 @@ export class QuotaManager {
 
       const nextReset = this.getNextResetTime(timezoneOffset);
 
-      this._log('Successfully retrieved quota status', { 
-        userId, 
-        quotaType, 
+      this._log('Successfully retrieved quota status', {
+        userId,
+        quotaType,
         remaining: currentRemaining,
-        dailyLimit: quotaDoc.dailyLimit 
+        dailyLimit: quotaDoc.dailyLimit
       });
 
       return {
@@ -1079,7 +1158,7 @@ export class QuotaManager {
         amount_consumed: amount,
         remaining_quota: remaining
       });
-      
+
       this._logDebug('Tracked quota usage', { userId, quotaType, amount, remaining });
     } catch (error) {
       this._logError('Failed to track quota usage', error, { userId, quotaType });
@@ -1094,7 +1173,7 @@ export class QuotaManager {
    */
   async resetUserQuotas(jwtToken, userId) {
     this._log('Resetting user quotas', { userId });
-    
+
     try {
       // Get user's quotas
       const profile = await this.getFullProfile(jwtToken, userId);
@@ -1123,17 +1202,17 @@ export class QuotaManager {
           documentId: quota.$id,
           resetTo: quota.dailyLimit
         });
-        
-        this._logDebug('Reset quota', { 
-          userId, 
-          quotaType: quota.quotaType, 
-          quotaId: quota.$id 
+
+        this._logDebug('Reset quota', {
+          userId,
+          quotaType: quota.quotaType,
+          quotaId: quota.$id
         });
       }
 
-      this._log('Successfully reset all quotas', { 
-        userId, 
-        quotasReset: resetResults.length 
+      this._log('Successfully reset all quotas', {
+        userId,
+        quotasReset: resetResults.length
       });
 
       return {
@@ -1156,7 +1235,7 @@ export class QuotaManager {
    */
   async clearSuspension(jwtToken, userId) {
     this._log('Clearing suspension', { userId });
-    
+
     try {
       // Get user profile to find moderation record
       const profile = await this.getFullProfile(jwtToken, userId);
@@ -1175,10 +1254,10 @@ export class QuotaManager {
             suspensionType: null
           }
         );
-        
-        this._log('Cleared moderation record', { 
-          userId, 
-          moderationId: profile.moderation.$id 
+
+        this._log('Cleared moderation record', {
+          userId,
+          moderationId: profile.moderation.$id
         });
       }
 
@@ -1192,10 +1271,10 @@ export class QuotaManager {
             dailyChangeCount: 0
           }
         );
-        
-        this._log('Reset timezone tracking', { 
-          userId, 
-          trackingId: profile.timezoneTracking.$id 
+
+        this._log('Reset timezone tracking', {
+          userId,
+          trackingId: profile.timezoneTracking.$id
         });
       }
 
@@ -1313,7 +1392,7 @@ export class QuotaManager {
    */
   async createProfileQuota(jwtToken, userId, quotaType, dailyLimit, remaining, profileId) {
     this._log('Creating profile quota', { userId, quotaType, dailyLimit });
-    
+
     try {
       const { ID } = await import('node-appwrite');
       const quotaData = {
@@ -1334,12 +1413,12 @@ export class QuotaManager {
         quotaData
       );
 
-      this._log('Successfully created profile quota', { 
-        userId, 
-        quotaType, 
-        quotaId: quota.$id 
+      this._log('Successfully created profile quota', {
+        userId,
+        quotaType,
+        quotaId: quota.$id
       });
-      
+
       return quota;
     } catch (error) {
       this._logError('Failed to create profile quota', error, { userId, quotaType });
@@ -1377,7 +1456,7 @@ export class QuotaManager {
    */
   async getFullProfile(jwtToken, userId) {
     this._logDebug('Getting full profile', { userId });
-    
+
     try {
       const [profile, quotas, moderation, timezoneTracking] = await Promise.all([
         this.getProfileData(jwtToken, userId),
@@ -1386,8 +1465,8 @@ export class QuotaManager {
         this.getProfileTimezoneTracking(jwtToken, userId)
       ]);
 
-      this._logDebug('Successfully retrieved full profile', { 
-        userId, 
+      this._logDebug('Successfully retrieved full profile', {
+        userId,
         hasProfile: !!profile,
         quotasCount: quotas.length,
         hasModeration: !!moderation,
