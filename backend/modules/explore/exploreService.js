@@ -1,6 +1,5 @@
 import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import { generatePhotoUrls } from '../../utils/photoUtils.js';
-
 const { createQuery } = AppwriteService;
 const Query = createQuery();
 
@@ -88,9 +87,9 @@ class ExploreService {
       // Varsayılan seçenekler
       const {
         includeMatches = true,
-        includeRecentDislikes = false,
-        includeRecentLikes = false,
-        includeBlocks = false,
+        includeRecentDislikes = true,
+        includeRecentLikes = true,
+        includeBlocks = true,
         dislikesTimeframeDays = 90 // 3 ay (likes için expireDate kullanılıyor)
       } = options;
 
@@ -108,6 +107,7 @@ class ExploreService {
       );
       queryNames.push('userProfile');
 
+      // Bu kullacının dahil olduğu bir match var mı?
       if (includeMatches) {
         queries.push(
           appwriteService.listDocuments(
@@ -124,6 +124,7 @@ class ExploreService {
         queryNames.push('matches');
       }
 
+      // Son zamanlarda dislike ettiği profiller (zaman aralığında) var mı?
       if (includeRecentDislikes) {
         const timeframeAgo = new Date();
         timeframeAgo.setDate(timeframeAgo.getDate() - dislikesTimeframeDays);
@@ -155,6 +156,7 @@ class ExploreService {
         queryNames.push('recentLikes');
       }
 
+      // Kullanıcının blockladığı profiller var mı?
       if (includeBlocks) {
         queries.push(
           appwriteService.listDocuments(
