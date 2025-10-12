@@ -103,7 +103,9 @@ class ProfileService {
       log(`[${requestId}] Profile retrieved successfully in ${operationDuration}ms`);
 
       const quotas = await appwriteService.quotaManager.getAllQuotaStatuses(jwtToken, userId);
-      Object.assign(profile, { quotaStatus: quotas });
+      // Kota resetlenmiş olabilir, güncellenmiş profili tekrar çek
+      const updatedProfile = await this.getFullProfile(jwtToken, userId);
+      Object.assign(profile, updatedProfile, { quotaStatus: quotas });
 
       return profile;
     } catch (error) {

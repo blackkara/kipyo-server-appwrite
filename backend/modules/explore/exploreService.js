@@ -90,6 +90,7 @@ class ExploreService {
         includeRecentDislikes = true,
         includeRecentLikes = true,
         includeBlocks = true,
+        includeDialogs = true, // Dahil olduğu tüm dialogları exclude et
         dislikesTimeframeDays = 90 // 3 ay (likes için expireDate kullanılıyor)
       } = options;
 
@@ -170,6 +171,20 @@ class ExploreService {
         queryNames.push('blocks');
       }
 
+      // Kullanıcının dahil olduğu tüm dialoglar var mı? (direkt veya normal fark etmeksizin)
+      if (includeDialogs) {
+        queries.push(
+          appwriteService.listDocuments(
+            jwtToken,
+            process.env.DB_COLLECTION_DIALOGS_ID,
+            [
+              Query.contains('occupantIds', userId)
+            ]
+          )
+        );
+        queryNames.push('dialogs');
+      }
+
       // Paralel exclusion sorgu execution
       const exclusionResults = await Promise.all(queries);
       const exclusionQueryDuration = Date.now() - operationStart;
@@ -225,6 +240,14 @@ class ExploreService {
       if (exclusionData.blocks) {
         const blockedUserIds = exclusionData.blocks.map(block => block.blockedId);
         excludedUserIds.push(...blockedUserIds);
+      }
+
+      // Dialoglar'dan excluded user ID'leri al (direkt veya normal fark etmeksizin)
+      if (exclusionData.dialogs) {
+        const dialogUserIds = exclusionData.dialogs.flatMap(dialog => 
+          dialog.occupantIds.filter(id => id !== userId)
+        );
+        excludedUserIds.push(...dialogUserIds);
       }
 
       // Exclusion sonuçlarını logla
