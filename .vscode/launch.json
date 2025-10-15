@@ -22,6 +22,26 @@
       ],
       "program": "${workspaceFolder}/backend/server.js",
       "envFile": "${workspaceFolder}/backend/.env"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Migration Users",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "program": "${workspaceFolder}/migration/migration_user/index.js",
+      "cwd": "${workspaceFolder}/migration/migration_user"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Migration Photos",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "program": "${workspaceFolder}/migration/migration_photo/index.js",
+      "cwd": "${workspaceFolder}/migration/migration_photo"
     }
   ]
 }
