@@ -1,4 +1,5 @@
 import exploreService from './exploreService.js';
+import { ExploreConfig } from './exploreConfig.js';
 
 class ExploreController {
 
@@ -9,15 +10,19 @@ class ExploreController {
 
     try {
       log(`[${requestId}] Get cards request started`);
-      const { limit = 10, offset = 0 } = req.query;
+      const { limit = ExploreConfig.DEFAULT_LIMIT, offset = ExploreConfig.DEFAULT_OFFSET } = req.query;
+      
+      // Validate and limit the request to prevent abuse
+      const validatedLimit = Math.min(parseInt(limit), ExploreConfig.MAX_LIMIT);
+      const validatedOffset = Math.max(parseInt(offset), 0); // Ensure offset is not negative
 
-      log(`[${requestId}] Request params: userId=${requestedUser.$id}, limit=${limit}, offset=${offset}`);
+      log(`[${requestId}] Request params: userId=${requestedUser.$id}, limit=${validatedLimit}, offset=${validatedOffset}`);
       const result = await exploreService.getSwipeCards(
         requestedUser,
         jwtToken,
         {
-          limit: parseInt(limit),
-          offset: parseInt(offset)
+          limit: validatedLimit,
+          offset: validatedOffset
         },
         requestId,
         log
@@ -33,7 +38,7 @@ class ExploreController {
         data: {
           cards: result,
           count: result.length,
-          hasMore: result.length === parseInt(limit)
+          hasMore: result.length === validatedLimit
         },
         requestId: requestId,
         duration: duration

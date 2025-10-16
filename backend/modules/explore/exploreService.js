@@ -1,5 +1,6 @@
 import AppwriteService from '../../services/appwrite/AppwriteService.js';
 import { generatePhotoUrls } from '../../utils/photoUtils.js';
+import { ExploreConfig } from './exploreConfig.js';
 const { createQuery } = AppwriteService;
 const Query = createQuery();
 
@@ -14,6 +15,12 @@ class ExploreService {
 
     for (let i = 0; i < geohash.length; i++) {
       const idx = BASE32.indexOf(geohash[i]);
+
+      // Validate character
+      if (idx === -1) {
+        throw new Error(`Invalid geohash character: ${geohash[i]}`);
+      }
+
       for (let j = 4; j >= 0; j--) {
         const bit = (idx >> j) & 1;
         if (isEven) {
@@ -46,23 +53,28 @@ class ExploreService {
     const R = 6371; // Dünya yarıçapı km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round(R * c); // km cinsinden tam sayı
   }
 
   // Geohash'ler arası mesafe hesaplama
   calculateDistanceFromGeohashes(geohash1, geohash2) {
     if (!geohash1 || !geohash2) return null;
-    
+
     try {
       const coord1 = this.decodeGeohash(geohash1);
       const coord2 = this.decodeGeohash(geohash2);
       return this.calculateDistance(coord1.lat, coord1.lon, coord2.lat, coord2.lon);
     } catch (error) {
+      // Log the error instead of silently failing
+      console.warn(`Geohash decode error: ${error.message}`, {
+        geohash1,
+        geohash2
+      });
       return null;
     }
   }
@@ -70,7 +82,7 @@ class ExploreService {
   async getSwipeCards(requestingUser, jwtToken, filters, requestId, log, options = {}) {
     try {
       const operationStart = Date.now();
-      const { limit = 10, offset = 0 } = filters;
+      const { limit = ExploreConfig.DEFAULT_LIMIT, offset = ExploreConfig.DEFAULT_OFFSET } = filters;
       log(`[${requestId}] Starting getSwipeCards for user: ${requestingUser.$id} with filters: limit=${limit}, offset=${offset}`);
 
       const appwriteService = AppwriteService.getInstance();
@@ -91,7 +103,7 @@ class ExploreService {
         includeRecentLikes = true,
         includeBlocks = true,
         includeDialogs = true, // Dahil olduğu tüm dialogları exclude et
-        dislikesTimeframeDays = 90 // 3 ay (likes için expireDate kullanılıyor)
+        dislikesTimeframeDays = ExploreConfig.DEFAULT_DISLIKES_TIMEFRAME_DAYS
       } = options;
 
       // Sadece istenen exclusion sorgularını hazırla
@@ -118,7 +130,9 @@ class ExploreService {
               Query.or([
                 Query.equal('userFirst', [userId]),
                 Query.equal('userSecond', [userId])
-              ])
+              ]),
+              Query.select(['userFirst', 'userSecond']),
+              Query.limit(ExploreConfig.EXCLUSION_QUERY_LIMIT)
             ]
           )
         );
@@ -136,7 +150,9 @@ class ExploreService {
             process.env.DB_COLLECTION_DISLIKES_ID,
             [
               Query.equal('dislikerId', [userId]),
-              Query.greaterThanEqual('$createdAt', timeframeAgo.toISOString())
+              Query.greaterThanEqual('$createdAt', timeframeAgo.toISOString()),
+              Query.select(['dislikedId']),
+              Query.limit(ExploreConfig.EXCLUSION_QUERY_LIMIT)
             ]
           )
         );
@@ -150,7 +166,9 @@ class ExploreService {
             process.env.DB_COLLECTION_LIKES_ID,
             [
               Query.equal('likerId', [userId]),
-              Query.greaterThan('expireDate', new Date().toISOString())
+             // Query.greaterThan('expireDate', new Date().toISOString()),
+              Query.select(['likedId']),
+              Query.limit(ExploreConfig.EXCLUSION_QUERY_LIMIT)
             ]
           )
         );
@@ -164,7 +182,9 @@ class ExploreService {
             jwtToken,
             process.env.DB_COLLECTION_BLOCKS_ID,
             [
-              Query.equal('blockerId', [userId])
+              Query.equal('blockerId', [userId]),
+              Query.select(['blockedId']),
+              Query.limit(ExploreConfig.EXCLUSION_QUERY_LIMIT)
             ]
           )
         );
@@ -178,7 +198,9 @@ class ExploreService {
             jwtToken,
             process.env.DB_COLLECTION_DIALOGS_ID,
             [
-              Query.contains('occupantIds', userId)
+              Query.contains('occupantIds', userId),
+              Query.select(['occupantIds']),
+              Query.limit(ExploreConfig.EXCLUSION_QUERY_LIMIT)
             ]
           )
         );
@@ -196,7 +218,7 @@ class ExploreService {
 
       exclusionResults.forEach((result, index) => {
         const queryName = queryNames[index];
-        
+
         // Kullanıcı profili ise geohash'i al
         if (queryName === 'userProfile') {
           userGeohash = result.geohash;
@@ -207,47 +229,56 @@ class ExploreService {
         }
       });
 
-      // Exclusion ID'lerini çıkar
-      const excludedUserIds = [userId]; // Don't show the user themselves
+      // Exclusion ID'lerini çıkar (Set kullan)
+      const excludedUserIds = new Set([userId]); // Don't show the user themselves
 
       // Matches'dan excluded user ID'leri al
       if (exclusionData.matches) {
-        const matchedUserIds = exclusionData.matches.flatMap(match => {
-          if (match.user1Id && match.user2Id) {
-            return match.user1Id === userId ? [match.user2Id] : [match.user1Id];
+        exclusionData.matches.forEach(match => {
+          if (match.userFirst && match.userSecond) { // ✅ DÜZELT
+            const matchedUserId = match.userFirst === userId
+              ? match.userSecond
+              : match.userFirst;
+            excludedUserIds.add(matchedUserId);
           }
-          if (match.userIds) {
-            return match.userIds.filter(id => id !== userId);
+
+          // userIds array yapısı için (eğer varsa)
+          if (match.userIds && Array.isArray(match.userIds)) {
+            match.userIds.forEach(id => {
+              if (id !== userId) excludedUserIds.add(id);
+            });
           }
-          return [];
         });
-        excludedUserIds.push(...matchedUserIds);
       }
 
       // Recent dislikes'dan excluded user ID'leri al
       if (exclusionData.recentDislikes) {
-        const dislikedUserIds = exclusionData.recentDislikes.map(dislike => dislike.dislikedId);
-        excludedUserIds.push(...dislikedUserIds);
+        exclusionData.recentDislikes.forEach(dislike => {
+          excludedUserIds.add(dislike.dislikedId);
+        });
       }
 
       // Recent likes'dan excluded user ID'leri al
       if (exclusionData.recentLikes) {
-        const likedUserIds = exclusionData.recentLikes.map(like => like.likedId);
-        excludedUserIds.push(...likedUserIds);
+        exclusionData.recentLikes.forEach(like => {
+          excludedUserIds.add(like.likedId);
+        });
       }
 
       // Blocks'dan excluded user ID'leri al
       if (exclusionData.blocks) {
-        const blockedUserIds = exclusionData.blocks.map(block => block.blockedId);
-        excludedUserIds.push(...blockedUserIds);
+        exclusionData.blocks.forEach(block => {
+          excludedUserIds.add(block.blockedId);
+        });
       }
 
       // Dialoglar'dan excluded user ID'leri al (direkt veya normal fark etmeksizin)
       if (exclusionData.dialogs) {
-        const dialogUserIds = exclusionData.dialogs.flatMap(dialog => 
-          dialog.occupantIds.filter(id => id !== userId)
-        );
-        excludedUserIds.push(...dialogUserIds);
+        exclusionData.dialogs.forEach(dialog => {
+          dialog.occupantIds.forEach(id => {
+            if (id !== userId) excludedUserIds.add(id);
+          });
+        });
       }
 
       // Exclusion sonuçlarını logla
@@ -257,19 +288,30 @@ class ExploreService {
           log(`[${requestId}] - ${queryName}: ${exclusionSummary[`${queryName}Count`]}`);
         }
       });
-      log(`[${requestId}] Exclusions fetched in ${exclusionQueryDuration}ms, total excluded: ${excludedUserIds.length}`);
+      const excludedCount = excludedUserIds.size;
+      log(`[${requestId}] Exclusions fetched in ${exclusionQueryDuration}ms, total excluded: ${excludedCount}`);
+
+      // Two-stage filtering strategy
+      const excludedArray = Array.from(excludedUserIds);
+      const useMemoryFiltering = excludedCount > ExploreConfig.QUERY_LIMIT;
 
       // Build query filters for potential cards
-      const queryFilters = [
-        Query.limit(limit),
-        Query.offset(offset)
-      ];
+      const queryFilters = [];
 
-      // FIX: Her excluded user ID için ayrı notEqual query ekle
-      // Appwrite notEqual sorgusu tek değer kabul ediyor
-      excludedUserIds.forEach(excludedId => {
-        queryFilters.push(Query.notEqual('$id', excludedId));
-      });
+      if (useMemoryFiltering) {
+        log(`[${requestId}] Using memory filtering (${excludedCount} excluded > ${ExploreConfig.QUERY_LIMIT})`);
+
+        // Strategy A: Fetch more cards, filter in memory
+        queryFilters.push(Query.limit(limit * ExploreConfig.FETCH_MULTIPLIER));
+        queryFilters.push(Query.offset(offset));
+      } else {
+        // Strategy B: Traditional query filtering (when excluded count is low)
+        excludedArray.forEach(excludedId => {
+          queryFilters.push(Query.notEqual('$id', excludedId));
+        });
+        queryFilters.push(Query.limit(limit));
+        queryFilters.push(Query.offset(offset));
+      }
 
       // Add age filters - yaş sınırları dahil edilsin
       const today = new Date();
@@ -295,12 +337,13 @@ class ExploreService {
         queryFilters.push(Query.equal('gender', selectedGenders));
       }
 
-      // Exclude blocked countries - FIX: Her blocked country için ayrı notEqual
-      if (showMeBlockedCountries && showMeBlockedCountries.length > 0) {
+      // Only add to query if list is small (<=COUNTRY_QUERY_LIMIT countries)
+      if (showMeBlockedCountries && showMeBlockedCountries.length > 0 && showMeBlockedCountries.length <= ExploreConfig.COUNTRY_QUERY_LIMIT) {
         showMeBlockedCountries.forEach(blockedCountry => {
           queryFilters.push(Query.notEqual('countryCode', blockedCountry));
         });
       }
+      // If >10 blocked countries, filter in memory (handled below)
 
       // Fetch potential cards
       const cardsQueryStart = Date.now();
@@ -311,11 +354,35 @@ class ExploreService {
       );
       const cardsQueryDuration = Date.now() - cardsQueryStart;
 
+      // Apply memory filtering if needed
+      let filteredDocuments;
+      if (useMemoryFiltering) {
+        filteredDocuments = documents.documents.filter(doc =>
+          !excludedUserIds.has(doc.$id)
+        );
+
+        // Also filter blocked countries in memory if needed
+        if (showMeBlockedCountries && showMeBlockedCountries.length > ExploreConfig.COUNTRY_QUERY_LIMIT) {
+          const blockedCountriesSet = new Set(showMeBlockedCountries);
+          filteredDocuments = filteredDocuments.filter(doc =>
+            !blockedCountriesSet.has(doc.countryCode)
+          );
+        }
+
+        // Take only requested limit
+        filteredDocuments = filteredDocuments.slice(0, limit);
+
+        log(`[${requestId}] Memory filtering: ${documents.documents.length} -> ${filteredDocuments.length} cards`);
+      } else {
+        // Use documents.documents directly
+        filteredDocuments = documents.documents;
+      }
+
       // Sadece gerekli verileri çek ve enrich et
       const enrichmentStart = Date.now();
       const enrichedCards = await this.enrichSwipeCards(
         jwtToken,
-        documents.documents,
+        filteredDocuments, // Changed from documents.documents
         requestId,
         log,
         userGeohash // Kullanıcının geohash'ini pass et
@@ -324,10 +391,17 @@ class ExploreService {
 
       log(`[${requestId}] Cards enrichment completed in ${enrichmentDuration}ms`);
 
+      log(documents);
+
       return {
         cards: enrichedCards,
         total: documents.total,
-        exclusionsSummary: exclusionSummary,
+        filteredTotal: filteredDocuments.length, // Actual returned count
+        exclusionsSummary: {
+          ...exclusionSummary,
+          totalExcluded: excludedCount, // Total excluded count
+          usedMemoryFiltering: useMemoryFiltering // Important metric
+        },
         performance: {
           exclusionQueryDuration,
           cardsQueryDuration,
@@ -339,6 +413,7 @@ class ExploreService {
 
     } catch (error) {
       log(`[${requestId}] ERROR in getSwipeCards: ${error.message}`);
+      console.error(`[${requestId}] Full error stack:`, error); // Full error logging
       throw new Error(`Failed to fetch cards: ${error.message}`);
     }
   }
@@ -346,6 +421,12 @@ class ExploreService {
 
   async enrichSwipeCards(jwtToken, profileDocuments, requestId, log, userGeohash = null) {
     try {
+      // Early return for empty array
+      if (profileDocuments.length === 0) {
+        log(`[${requestId}] No profiles to enrich`);
+        return [];
+      }
+
       const profileIds = profileDocuments.map(doc => doc.$id);
 
       // Sadece swipe cards için gerekli verileri paralel çek
@@ -388,6 +469,7 @@ class ExploreService {
 
     } catch (error) {
       log(`[${requestId}] ERROR in enrichSwipeCards: ${error.message}`);
+      console.error(`[${requestId}] Enrichment error stack:`, error); // Error logging
       throw error;
     }
   }
@@ -402,7 +484,8 @@ class ExploreService {
       [
         Query.equal('userId', userIds),
         Query.equal('isActive', true),
-        Query.orderAsc('displayOrder')
+        Query.orderAsc('displayOrder'),
+        Query.limit(ExploreConfig.EXCLUSION_QUERY_LIMIT)
       ]
     );
     return result.documents;
@@ -417,7 +500,7 @@ class ExploreService {
       process.env.DB_COLLECTION_PROFILE_PREFERENCES_ID,
       [
         Query.equal('userId', userIds),
-        Query.limit(userIds.length)
+        Query.limit(Math.min(userIds.length, ExploreConfig.EXCLUSION_QUERY_LIMIT))
       ]
     );
     return result.documents;
