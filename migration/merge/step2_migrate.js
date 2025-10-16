@@ -84,6 +84,71 @@ function isValidEmail(email) {
 }
 
 /**
+ * Create profile quota records for a user
+ * @param {string} userId - Appwrite user ID
+ * @param {string} profileId - Profile document ID
+ * @returns {Promise<void>}
+ */
+async function createUserQuotas(userId, profileId) {
+  const quotaTypes = ['TRANSLATE', 'DIRECT_MESSAGE'];
+  const currentDate = new Date().toISOString();
+  
+  for (const quotaType of quotaTypes) {
+    try {
+      await database.createDocument(
+        config.databaseId,
+        config.quotaCollectionId,
+        ID.unique(),
+        {
+          userId: userId,
+          quotaType: quotaType,
+          remainingCount: 5,
+          dailyLimit: 5,
+          resetDate: currentDate,
+          profileRef: profileId
+        },
+        [
+          Permission.read(Role.any()),
+          Permission.write(Role.user(userId)),
+        ]
+      );
+    } catch (error) {
+      console.error(`❌ Failed to create ${quotaType} quota for user ${userId}:`, error.message);
+      throw error;
+    }
+  }
+}
+
+/**
+ * Create profile timezone tracking record for a user
+ * @param {string} userId - Appwrite user ID
+ * @param {string} profileId - Profile document ID
+ * @returns {Promise<void>}
+ */
+async function createTimezoneTracking(userId, profileId) {
+  try {
+    await database.createDocument(
+      config.databaseId,
+      config.timezoneTrackingCollectionId,
+      ID.unique(),
+      {
+        userId: userId,
+        timezoneOffset: 0, // Default UTC offset
+        dailyChangeCount: 1,
+        profileRef: profileId
+      },
+      [
+        Permission.read(Role.any()),
+        Permission.write(Role.user(userId)),
+      ]
+    );
+  } catch (error) {
+    console.error(`❌ Failed to create timezone tracking for user ${userId}:`, error.message);
+    throw error;
+  }
+}
+
+/**
  * Transform merged user data to required format
  * @param {Object} mergedUser - Merged user data from step1
  * @returns {Object} Transformed user data
@@ -210,7 +275,14 @@ async function processUser(mergedUser) {
     // Create profile
     try {
       const profile = await createProfileWithRetry(userData);
-      console.log(`✓ Successfully processed user: ${userData.username} (${userData.email}) + Profile: ${profile.$id}`);
+      
+      // Create quota records for the user
+      await createUserQuotas(userData.userId, profile.$id);
+      
+      // Create timezone tracking for the user
+      await createTimezoneTracking(userData.userId, profile.$id);
+      
+      console.log(`✓ Successfully processed user: ${userData.username} (${userData.email}) + Profile: ${profile.$id} + Quotas + Timezone`);
     } catch (profileError) {
       console.error(`✗ Profile creation failed for user ${userData.email}:`, profileError.message);
       // Still return true since user was created, but track the profile error
