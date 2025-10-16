@@ -214,8 +214,11 @@ async function uploadToDigitalOcean(photoId, imageBuffer) {
   try {
     const result = await s3.upload(uploadParams).promise();
     stats.photosUploaded++;
-    console.log(`✅ Uploaded to: ${result.Location}`);
-    return result.Location;
+    
+    // Fix: AWS result.Location format is inconsistent, construct proper URL
+    const properUrl = `${photoConfig.digitalOcean.baseUrl}/${key}`;
+    console.log(`✅ Uploaded to: ${properUrl}`);
+    return properUrl;
   } catch (error) {
     throw new Error(`Upload failed: ${error.message}`);
   }
