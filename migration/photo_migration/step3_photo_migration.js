@@ -9,10 +9,10 @@ const sdk = require('node-appwrite');
 const { ID, Permission, Role, Query } = sdk;
 
 // Configuration
-const { config } = require('./config');
+const { config } = require('../config');
 
 // File paths
-const mergedFilePath = path.join(__dirname, 'merged.json');
+const mergedFilePath = path.join(__dirname, '..', 'merged.json');
 
 // Initialize Appwrite client
 const client = new sdk.Client();

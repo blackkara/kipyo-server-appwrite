@@ -6,7 +6,7 @@ const sdk = require('node-appwrite');
 const { ID, Permission, Role, Query } = sdk;
 
 // Configuration
-const { config } = require('./config');
+const { config } = require('../config');
 
 // Initialize Appwrite client
 const client = new sdk.Client();
@@ -36,6 +36,8 @@ if (config.photoMigration.digitalOcean.endpoint && config.photoMigration.digital
 const stats = {
   digitalOceanPhotosDeleted: 0,
   profileMediaDeleted: 0,
+  profileQuotasDeleted: 0,
+  timezoneTrackingDeleted: 0,
   documentsDeleted: 0,
   usersDeleted: 0,
   errors: []
@@ -308,6 +310,78 @@ async function deleteAllProfiles() {
 }
 
 /**
+ * Delete all quota records
+ * @returns {Promise<number>} Number of deleted quotas
+ */
+async function deleteAllQuotas() {
+  console.log('🧹 Deleting all quota records...');
+  let deletedCount = 0;
+  
+  try {
+    while (true) {
+      const quotas = await database.listDocuments(
+        config.databaseId,
+        config.quotaCollectionId,
+        [Query.limit(100)]
+      );
+
+      if (quotas.documents.length === 0) break;
+
+      for (const quota of quotas.documents) {
+        await database.deleteDocument(
+          config.databaseId,
+          config.quotaCollectionId,
+          quota.$id
+        );
+        deletedCount++;
+      }
+    }
+    
+    console.log(`✓ Successfully deleted ${deletedCount} quota records`);
+    return deletedCount;
+  } catch (error) {
+    console.error('✗ Error deleting quotas:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Delete all timezone tracking records
+ * @returns {Promise<number>} Number of deleted timezone tracking records
+ */
+async function deleteAllTimezoneTracking() {
+  console.log('🧹 Deleting all timezone tracking records...');
+  let deletedCount = 0;
+  
+  try {
+    while (true) {
+      const timezones = await database.listDocuments(
+        config.databaseId,
+        config.timezoneTrackingCollectionId,
+        [Query.limit(100)]
+      );
+
+      if (timezones.documents.length === 0) break;
+
+      for (const timezone of timezones.documents) {
+        await database.deleteDocument(
+          config.databaseId,
+          config.timezoneTrackingCollectionId,
+          timezone.$id
+        );
+        deletedCount++;
+      }
+    }
+    
+    console.log(`✓ Successfully deleted ${deletedCount} timezone tracking records`);
+    return deletedCount;
+  } catch (error) {
+    console.error('✗ Error deleting timezone tracking records:', error.message);
+    throw error;
+  }
+}
+
+/**
  * Delete all users in batches (users don't support bulk delete)
  * @returns {Promise<void>}
  */
@@ -490,6 +564,8 @@ function printStats() {
   console.log('\n=== Cleanup Statistics ===');
   console.log(`DigitalOcean photos deleted: ${stats.digitalOceanPhotosDeleted}`);
   console.log(`Profile_media documents deleted: ${stats.profileMediaDeleted}`);
+  console.log(`Profile_quotas documents deleted: ${stats.profileQuotasDeleted}`);
+  console.log(`Timezone_tracking documents deleted: ${stats.timezoneTrackingDeleted}`);
   console.log(`Profile documents deleted: ${stats.documentsDeleted}`);
   console.log(`Users deleted: ${stats.usersDeleted}`);
   
@@ -511,7 +587,7 @@ function printStats() {
  * @returns {Promise<void>}
  */
 async function fullCleanup() {
-  console.log('Starting full cleanup (DigitalOcean + profile_media + profiles + users)...');
+  console.log('Starting full cleanup (DigitalOcean + profile_media + profile_quotas + timezone_tracking + profiles + users)...');
   const startTime = Date.now();
   
   try {
@@ -521,10 +597,16 @@ async function fullCleanup() {
     // STEP 2: Delete all profile_media documents (child relationships)
     await deleteAllProfileMedia();
     
-    // STEP 3: Delete all profile documents (parent relationships)
+    // STEP 3: Delete all profile_quotas documents (child relationships)
+    stats.profileQuotasDeleted = await deleteAllQuotas();
+    
+    // STEP 4: Delete all timezone tracking documents (child relationships)
+    stats.timezoneTrackingDeleted = await deleteAllTimezoneTracking();
+    
+    // STEP 5: Delete all profile documents (parent relationships)
     await deleteAllProfiles();
     
-    // STEP 4: Finally delete all users
+    // STEP 6: Finally delete all users
     await deleteAllUsers();
     
   } catch (error) {
@@ -631,6 +713,7 @@ async function usersOnlyCleanup() {
   }
 }
 
+
 // Export functions
 module.exports = {
   fullCleanup,
@@ -677,7 +760,7 @@ if (require.main === module) {
       break;
     default:
       console.log('Usage:');
-      console.log('  node step2_clean.js full     # Delete all DigitalOcean photos, profile_media, profiles and users (safe order)');
+      console.log('  node step2_clean.js full     # Delete all DigitalOcean photos, profile_media, profile_quotas, profiles and users (safe order)');
       console.log('  node step2_clean.js photos   # Delete only DigitalOcean photos');
       console.log('  node step2_clean.js media    # Delete only profile_media documents');
       console.log('  node step2_clean.js profiles # Delete only profile documents');
