@@ -149,6 +149,46 @@ async function createTimezoneTracking(userId, profileId) {
 }
 
 /**
+ * Get the latest activity date from user and profile data
+ * @param {Object} user - User data from ConnectyCube
+ * @param {Object} profile - Profile data from ConnectyCube
+ * @returns {string} ISO 8601 date string or empty string
+ */
+function getLatestActivityDate(user, profile) {
+  let lastRequestDate = null;
+  let stateDate = null;
+  
+  // Parse user.last_request_at (ISO 8601 format)
+  if (user?.last_request_at) {
+    try {
+      lastRequestDate = new Date(user.last_request_at);
+    } catch (error) {
+      console.warn(`Invalid last_request_at format for user ${user.email}: ${user.last_request_at}`);
+    }
+  }
+  
+  // Parse profile.stateDate (Unix timestamp in milliseconds)
+  if (profile?.stateDate) {
+    try {
+      stateDate = new Date(profile.stateDate);
+    } catch (error) {
+      console.warn(`Invalid stateDate format for user ${user.email}: ${profile.stateDate}`);
+    }
+  }
+  
+  // Return the most recent date, or empty string if neither exists
+  if (lastRequestDate && stateDate) {
+    return lastRequestDate > stateDate ? lastRequestDate.toISOString() : stateDate.toISOString();
+  } else if (lastRequestDate) {
+    return lastRequestDate.toISOString();
+  } else if (stateDate) {
+    return stateDate.toISOString();
+  }
+  
+  return '';
+}
+
+/**
  * Transform merged user data to required format
  * @param {Object} mergedUser - Merged user data from step1
  * @returns {Object} Transformed user data
@@ -156,6 +196,9 @@ async function createTimezoneTracking(userId, profileId) {
 function transformUserData(mergedUser) {
   const user = mergedUser.user;
   const profile = mergedUser.profile;
+  
+  // Determine the most recent activity date
+  const requestDate = getLatestActivityDate(user, profile);
   
   // Use profile data if available, fallback to user data
   const userData = {
@@ -169,7 +212,9 @@ function transformUserData(mergedUser) {
     gender: profile?.gender ? genderCodeToValue(profile.gender) : GENDER_MAP.default,
     countryCode: profile?.country?.toLowerCase() || '',
     city: profile?.city?.trim() || '',
-    about: profile?.about?.trim() || ''
+    about: profile?.about?.trim() || '',
+    geohash: profile?.geohash || '',
+    requestDate: requestDate
   };
   
   return userData;
