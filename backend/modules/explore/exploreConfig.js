@@ -21,6 +21,19 @@ export const ExploreConfig = {
   GEOHASH_MIN_LENGTH: 1, // Minimum geohash length for validation
   GEOHASH_MAX_LENGTH: 12, // Maximum geohash length for validation
   
+  // Location scope settings
+  LOCATION_SCOPE: {
+    WORLDWIDE: 'worldwide',
+    COUNTRY: 'country', 
+    CITY: 'city'
+  },
+  
+  // Geohash precision for location filtering
+  GEOHASH_PRECISION: {
+    COUNTRY: 3, // First 3 characters (~630km radius) for country-level filtering
+    CITY: 5     // First 5 characters (~19km radius) for city-level filtering
+  },
+  
   // Performance monitoring
   LOG_PERFORMANCE_METRICS: true, // Enable detailed performance logging
   WARN_ON_HIGH_EXCLUSIONS: true, // Log warnings for users with many exclusions

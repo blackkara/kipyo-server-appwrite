@@ -93,6 +93,7 @@ class ExploreService {
       const showMeGenderMan = requestingUser?.prefs?.showMeGenderMan ?? true;
       const showMeGenderNonBinary = requestingUser?.prefs?.showMeGenderNonBinary ?? true;
       const showMeBlockedCountries = requestingUser?.prefs?.showMeBlockedCountries ?? [];
+      const locationScope = requestingUser?.prefs?.locationScope ?? ExploreConfig.LOCATION_SCOPE.WORLDWIDE;
 
       const userId = requestingUser.$id;
 
@@ -344,6 +345,23 @@ class ExploreService {
         });
       }
       // If >10 blocked countries, filter in memory (handled below)
+
+      // Location scope filters based on user's geohash
+      if (userGeohash && locationScope !== ExploreConfig.LOCATION_SCOPE.WORLDWIDE) {
+        if (locationScope === ExploreConfig.LOCATION_SCOPE.COUNTRY) {
+          // Use configured precision for country-level matching
+          const countryPrefix = userGeohash.substring(0, ExploreConfig.GEOHASH_PRECISION.COUNTRY);
+          queryFilters.push(Query.startsWith('geohash', countryPrefix));
+          log(`[${requestId}] Filtering by country geohash prefix: ${countryPrefix}`);
+        } else if (locationScope === ExploreConfig.LOCATION_SCOPE.CITY) {
+          // Use configured precision for city-level matching  
+          const cityPrefix = userGeohash.substring(0, ExploreConfig.GEOHASH_PRECISION.CITY);
+          queryFilters.push(Query.startsWith('geohash', cityPrefix));
+          log(`[${requestId}] Filtering by city geohash prefix: ${cityPrefix}`);
+        }
+      } else if (locationScope !== ExploreConfig.LOCATION_SCOPE.WORLDWIDE) {
+        log(`[${requestId}] Location scope '${locationScope}' requested but user geohash not available`);
+      }
 
       // Fetch potential cards
       const cardsQueryStart = Date.now();
