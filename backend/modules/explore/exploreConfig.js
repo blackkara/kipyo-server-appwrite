@@ -35,7 +35,7 @@ export const ExploreConfig = {
   LOG_GEOHASH_ERRORS: true, // Log geohash decode errors
   
   // Pagination settings
-  DEFAULT_LIMIT: 10, // Default number of cards to return per request
+  DEFAULT_LIMIT: 100, // Default number of cards to return per request
   DEFAULT_OFFSET: 0, // Default starting position for pagination
   MAX_LIMIT: 50, // Maximum cards allowed per request (to prevent abuse)
   
