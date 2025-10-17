@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const jsonFilePath = path.join(__dirname, 'users_custom.json');
 const { parser } = require('stream-json');
 const { streamArray } = require('stream-json/streamers/StreamArray');
 const crypto = require('crypto');
@@ -9,7 +8,10 @@ const sdk = require('node-appwrite');
 const { ID, Permission, Role } = sdk;
 
 // Configuration
-const {config} = require('./config');
+const { config } = require('../config');
+
+// File paths
+const mergedFilePath = path.join(__dirname, '..', 'merged.json');
 
 // Initialize Appwrite client
 const client = new sdk.Client();
@@ -82,22 +84,140 @@ function isValidEmail(email) {
 }
 
 /**
- * Transform user data from JSON to required format
- * @param {Object} rawUser - Raw user data from JSON
+ * Create profile quota records for a user
+ * @param {string} userId - Appwrite user ID
+ * @param {string} profileId - Profile document ID
+ * @returns {Promise<void>}
+ */
+async function createUserQuotas(userId, profileId) {
+  const quotaTypes = ['TRANSLATE', 'DIRECT_MESSAGE'];
+  const currentDate = new Date().toISOString();
+  
+  for (const quotaType of quotaTypes) {
+    try {
+      await database.createDocument(
+        config.databaseId,
+        config.quotaCollectionId,
+        ID.unique(),
+        {
+          userId: userId,
+          quotaType: quotaType,
+          remainingCount: 5,
+          dailyLimit: 5,
+          resetDate: currentDate,
+          profileRef: profileId
+        },
+        [
+          Permission.read(Role.any()),
+          Permission.write(Role.user(userId)),
+        ]
+      );
+    } catch (error) {
+      console.error(`❌ Failed to create ${quotaType} quota for user ${userId}:`, error.message);
+      throw error;
+    }
+  }
+}
+
+/**
+ * Create profile timezone tracking record for a user
+ * @param {string} userId - Appwrite user ID
+ * @param {string} profileId - Profile document ID
+ * @returns {Promise<void>}
+ */
+async function createTimezoneTracking(userId, profileId) {
+  try {
+    await database.createDocument(
+      config.databaseId,
+      config.timezoneTrackingCollectionId,
+      ID.unique(),
+      {
+        userId: userId,
+        timezoneOffset: 0, // Default UTC offset
+        dailyChangeCount: 1,
+        profileRef: profileId
+      },
+      [
+        Permission.read(Role.any()),
+        Permission.write(Role.user(userId)),
+      ]
+    );
+  } catch (error) {
+    console.error(`❌ Failed to create timezone tracking for user ${userId}:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Get the latest activity date from user and profile data
+ * @param {Object} user - User data from ConnectyCube
+ * @param {Object} profile - Profile data from ConnectyCube
+ * @returns {string} ISO 8601 date string or empty string
+ */
+function getLatestActivityDate(user, profile) {
+  let lastRequestDate = null;
+  let stateDate = null;
+  
+  // Parse user.last_request_at (ISO 8601 format)
+  if (user?.last_request_at) {
+    try {
+      lastRequestDate = new Date(user.last_request_at);
+    } catch (error) {
+      console.warn(`Invalid last_request_at format for user ${user.email}: ${user.last_request_at}`);
+    }
+  }
+  
+  // Parse profile.stateDate (Unix timestamp in milliseconds)
+  if (profile?.stateDate) {
+    try {
+      stateDate = new Date(profile.stateDate);
+    } catch (error) {
+      console.warn(`Invalid stateDate format for user ${user.email}: ${profile.stateDate}`);
+    }
+  }
+  
+  // Return the most recent date, or empty string if neither exists
+  if (lastRequestDate && stateDate) {
+    return lastRequestDate > stateDate ? lastRequestDate.toISOString() : stateDate.toISOString();
+  } else if (lastRequestDate) {
+    return lastRequestDate.toISOString();
+  } else if (stateDate) {
+    return stateDate.toISOString();
+  }
+  
+  return '';
+}
+
+/**
+ * Transform merged user data to required format
+ * @param {Object} mergedUser - Merged user data from step1
  * @returns {Object} Transformed user data
  */
-function transformUserData(rawUser) {
-  return {
-    username: rawUser.username?.trim(),
-    email: rawUser.email?.trim().toLowerCase(),
-    birthDate: new Date(rawUser.birthDate).toISOString(),
-    createDate: new Date(rawUser.createDate).toISOString(),
-    gender: genderCodeToValue(rawUser.gender),
-    countryCode: rawUser.country?.toLowerCase(),
-    city: rawUser.city?.trim(),
-    about: rawUser.about?.trim() || '',
-    photos: Array.isArray(rawUser.photos) ? rawUser.photos : []
+function transformUserData(mergedUser) {
+  const user = mergedUser.user;
+  const profile = mergedUser.profile;
+  
+  // Determine the most recent activity date
+  const requestDate = getLatestActivityDate(user, profile);
+  
+  // Use profile data if available, fallback to user data
+  const userData = {
+    // Basic user info from user object
+    username: profile?.username || `user_${user.id}`,
+    email: user.email || profile?.email,
+    
+    // Profile data if available
+    birthDate: profile?.birthDate ? new Date(profile.birthDate).toISOString() : new Date('1990-01-01').toISOString(),
+    createDate: profile?.createDate ? new Date(profile.createDate).toISOString() : new Date(user.created_at).toISOString(),
+    gender: profile?.gender ? genderCodeToValue(profile.gender) : GENDER_MAP.default,
+    countryCode: profile?.country?.toLowerCase() || '',
+    city: profile?.city?.trim() || '',
+    about: profile?.about?.trim() || '',
+    geohash: profile?.geohash || '',
+    requestDate: requestDate
   };
+  
+  return userData;
 }
 
 /**
@@ -167,14 +287,14 @@ async function createProfileWithRetry(userData) {
 }
 
 /**
- * Process a single user
- * @param {Object} rawUser - Raw user data from JSON
+ * Process a single merged user
+ * @param {Object} mergedUser - Merged user data from step1
  * @returns {Promise<boolean>} Success status
  */
-async function processUser(rawUser) {
+async function processUser(mergedUser) {
   try {
     // Transform data
-    const userData = transformUserData(rawUser);
+    const userData = transformUserData(mergedUser);
     
     // Validate data
     const validation = validateUserData(userData);
@@ -198,15 +318,32 @@ async function processUser(rawUser) {
     userData.userId = appwriteUser.userId;
     
     // Create profile
-    await createProfileWithRetry(userData);
+    try {
+      const profile = await createProfileWithRetry(userData);
+      
+      // Create quota records for the user
+      await createUserQuotas(userData.userId, profile.$id);
+      
+      // Create timezone tracking for the user
+      await createTimezoneTracking(userData.userId, profile.$id);
+      
+      console.log(`✓ Successfully processed user: ${userData.username} (${userData.email}) + Profile: ${profile.$id} + Quotas + Timezone`);
+    } catch (profileError) {
+      console.error(`✗ Profile creation failed for user ${userData.email}:`, profileError.message);
+      // Still return true since user was created, but track the profile error
+      stats.errors.push({
+        user: userData.email,
+        error: 'Profile creation failed',
+        details: profileError.message
+      });
+    }
     
-    console.log(`✓ Successfully processed user: ${userData.username} (${userData.email})`);
     return true;
     
   } catch (error) {
-    console.error(`✗ Error processing user ${rawUser.email}:`, error.message);
+    console.error(`✗ Error processing user ${mergedUser.user?.email}:`, error.message);
     stats.errors.push({
-      user: rawUser.email,
+      user: mergedUser.user?.email,
       error: error.message,
       details: error
     });
@@ -215,12 +352,20 @@ async function processUser(rawUser) {
 }
 
 /**
- * Process users in batches
+ * Process users in batches (respecting maxUsers limit)
  * @param {Array} userBatch - Batch of users to process
  * @returns {Promise<void>}
  */
 async function processBatch(userBatch) {
-  const promises = userBatch.map(user => processUser(user));
+  // Filter batch to respect maxUsers limit
+  const remainingSlots = config.maxUsers - stats.processed;
+  const usersToProcess = userBatch.slice(0, remainingSlots);
+  
+  if (usersToProcess.length === 0) {
+    return;
+  }
+  
+  const promises = usersToProcess.map(user => processUser(user));
   const results = await Promise.allSettled(promises);
   
   results.forEach((result, index) => {
@@ -267,34 +412,34 @@ function printStats() {
  * @returns {Promise<void>}
  */
 async function migrate() {
-  console.log('Starting migration...');
+  console.log('Starting step2 migration...');
   const startTime = Date.now();
   
   try {
-    // Check if file exists
-    if (!fs.existsSync(jsonFilePath)) {
-      throw new Error(`JSON file not found: ${jsonFilePath}`);
+    // Check if merged file exists
+    if (!fs.existsSync(mergedFilePath)) {
+      throw new Error(`Merged file not found: ${mergedFilePath}`);
     }
     
-    const jsonStream = fs.createReadStream(jsonFilePath)
+    const jsonStream = fs.createReadStream(mergedFilePath)
       .pipe(parser())
       .pipe(streamArray());
     
     let userBatch = [];
     
     for await (const { value } of jsonStream) {
+      // Check if we've reached the limit before adding to batch
+      if (stats.processed >= config.maxUsers) {
+        console.log(`Reached maximum user limit (${config.maxUsers})`);
+        break;
+      }
+      
       userBatch.push(value);
       
       // Process batch when it reaches the batch size
       if (userBatch.length >= config.batchSize) {
         await processBatch(userBatch);
         userBatch = [];
-      }
-      
-      // Check if we've reached the limit
-      if (stats.processed >= config.maxUsers) {
-        console.log(`Reached maximum user limit (${config.maxUsers})`);
-        break;
       }
     }
     
@@ -310,7 +455,7 @@ async function migrate() {
     const endTime = Date.now();
     const duration = (endTime - startTime) / 1000;
     
-    console.log(`\nMigration completed in ${duration.toFixed(2)} seconds`);
+    console.log(`\nStep2 migration completed in ${duration.toFixed(2)} seconds`);
     printStats();
   }
 }

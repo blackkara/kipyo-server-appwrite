@@ -52,10 +52,12 @@ ConnectyCube Users + Profiles → Merged Data → Appwrite → Photos Migration
 
 ## 🚀 Migration Adımları
 
-### Step 1: Data Merging (step1_merge.js)
-**Amaç**: İki ayrı JSON dosyasını birleştir
+### Step 1: Data Preparation + Geohash Generation
+**Klasör**: `data_preparation/`
+**Amaç**: İki ayrı JSON dosyasını birleştir ve geohash field'ları ekle
 
 ```bash
+cd data_preparation
 node step1_merge.js
 ```
 
@@ -64,20 +66,26 @@ node step1_merge.js
 - `connectycube_profiles.json` (29,718 profiles)
 
 **Çıktı:**
-- `merged.json` (96.33% merge rate)
+- `merged.json` (96.33% merge rate + %100 geohash coverage)
 
 **Özellikler:**
 - Stream processing (memory efficient)
 - User-profile matching by ID
+- ✨ **7-character geohash generation**
+- ✨ **Country code normalization** (us → US, xk → XK)
+- ✨ **Kosovo (XK) support**
 - Automatic photo array creation
 - Missing profile handling
 
 ---
 
-### Step 2: User Migration (step2_migrate.js)
+### Step 2: Appwrite Migration
+**Klasör**: `appwrite_migration/`
 **Amaç**: Kullanıcıları ve profilleri Appwrite'a migrate et
 
 ```bash
+cd appwrite_migration
+
 # Önce cleanup (isteğe bağlı)
 node step2_clean.js
 
@@ -86,25 +94,28 @@ node step2_migrate.js
 ```
 
 **Girdiler:**
-- `merged.json`
+- `merged.json` (geohash field'ları ile)
 
 **Çıktılar:**
 - Appwrite Users
-- Appwrite Profiles (with relationships)
+- Appwrite Profiles (geohash field'ları dahil)
 
 **Özellikler:**
 - Batch processing (10'lu gruplar)
 - Retry logic (3 deneme)
 - Validation & error handling
+- ✨ **Geohash field'ları otomatik eklenir**
 - Gender code mapping (1=man, 2=woman)
 - ISO 8601 date conversion
 
 ---
 
-### Step 3: Photo Migration (step3_photo_migration.js)
+### Step 3: Photo Migration
+**Klasör**: `photo_migration/`
 **Amaç**: ConnectyCube blob'larını DigitalOcean'a migrate et
 
 ```bash
+cd photo_migration
 node step3_photo_migration.js
 ```
 
@@ -128,20 +139,28 @@ node step3_photo_migration.js
 ## 📁 Dosya Yapısı
 
 ```
-migration/merge/
+migration/
 ├── README.md                    # Bu dosya (genel rehber)
-├── README_PHOTO_MIGRATION.md    # Photo migration detayları
 ├── config.js                    # Tüm konfigürasyon
 ├── appwrite.json               # Appwrite collections schema
-│
-├── step1_merge.js              # Data merging
-├── step2_clean.js              # Appwrite cleanup
-├── step2_migrate.js            # User/profile migration
-├── step3_photo_migration.js    # Photo migration
-│
+├── merged.json                 # Output: Merged data (geohash ile)
 ├── connectycube_users.json     # Input: Users (30,850)
 ├── connectycube_profiles.json  # Input: Profiles (29,718)
-└── merged.json                 # Output: Merged data
+├── package.json                # Dependencies
+│
+├── data_preparation/           # Data merging + geohash
+│   ├── README.md
+│   └── step1_merge.js
+│
+├── appwrite_migration/         # Appwrite migration
+│   ├── README.md
+│   ├── step2_clean.js          # Cleanup script
+│   └── step2_migrate.js        # Migration script
+│
+└── photo_migration/            # Photo migration
+    ├── README.md
+    ├── README_PHOTO_MIGRATION.md # Detaylı photo rehberi
+    └── step3_photo_migration.js
 ```
 
 ---
