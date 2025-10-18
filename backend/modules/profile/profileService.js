@@ -96,6 +96,24 @@ class ProfileService {
       const timeZoneUpdateResult = await appwriteService.quotaManager.updateUserTimezone(jwtToken, profile, requestedTimezone);
       log(`[${requestId}] GetProfile pre validation - Remaining direct messages: ${profile.dailyDirectMessageRemaining}`);
 
+      // Update requestDate with current timestamp (async without blocking)
+      const currentRequestDate = new Date().toISOString();
+      const updateData = { requestDate: currentRequestDate };
+      // Fire and forget - don't wait for completion
+      appwriteService.updateDocument(
+        jwtToken,
+        process.env.DB_COLLECTION_PROFILES_ID,
+        userId,
+        updateData
+      ).then(() => {
+        log(`[${requestId}] Profile requestDate updated to: ${currentRequestDate}`);
+      }).catch((error) => {
+        log(`[${requestId}] WARNING: Failed to update requestDate: ${error.message}`);
+      });
+      
+      // Update local profile object immediately for response
+      profile.requestDate = currentRequestDate;
+
       const profileCompletionStats = ProfileUtils.getProfileCompletionDetails(profile);
       Object.assign(profile, { profileCompletionStats: profileCompletionStats });
 
